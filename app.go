@@ -56,6 +56,10 @@ func (a *App) startup(ctx context.Context) {
 	if a.cfg.Port == "" {
 		a.cfg.Port = "38899"
 	}
+	// macOS raises the Local Network permission prompt on broadcast traffic,
+	// not on connected unicast UDP (which is silently dropped when denied).
+	// One background discovery primes the prompt on first launch.
+	go func() { _, _ = wiz.DiscoverDevices() }()
 }
 
 // GetConfig returns the shared config (same file the TUI uses).
