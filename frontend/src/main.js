@@ -1,7 +1,7 @@
 import './style.css';
 import {
   GetConfig, GetState, SetPower, SetPilot, SetLastState,
-  Discover, SaveDevice, SetTheme, SaveGroup, DeleteGroup,
+  Discover, SaveDevice, DeleteDevice, SetTheme, SaveGroup, DeleteGroup,
 } from '../wailsjs/go/main/App';
 
 // ── state ──────────────────────────────────────────────────────────
@@ -550,20 +550,26 @@ window.addEventListener('keydown', (e) => {
   if (openPanel) togglePanel(openPanel); // Esc collapses back to the home dial
 });
 
-el('discover-pill').onclick = async () => {
-  const body = openOverlay('Discover');
-  body.innerHTML = '<p class="overlay-hint">scanning 255.255.255.255:38899 …</p>';
-  const devices = await Discover();
+let lastScan = []; // kept so delete/rename can re-render without a rescan
+
+function renderDiscoverCards(body) {
   body.innerHTML = '';
-  if (!devices.length) {
-    body.innerHTML = '<p class="overlay-hint">no bulbs found — same network as the bulbs?</p>';
-    return;
-  }
   // overlay the user's saved names by MAC — never show/overwrite them with
   // the firmware module name
   const savedByMac = {};
   for (const s of S.cfg.savedDevices || []) savedByMac[(s.mac || '').toLowerCase()] = s;
-  for (const d of devices) {
+  const foundMacs = new Set(lastScan.map((d) => (d.mac || '').toLowerCase()));
+  // saved devices the scan didn't find still get a card, so they can be
+  // renamed or deleted while offline
+  const offlineSaved = (S.cfg.savedDevices || [])
+    .filter((s) => !foundMacs.has((s.mac || '').toLowerCase()))
+    .map((s) => ({ ip: s.ip, mac: s.mac, name: s.name, offline: true }));
+  const all = [...lastScan, ...offlineSaved];
+  if (!all.length) {
+    body.innerHTML = '<p class="overlay-hint">no bulbs found — same network as the bulbs?</p>';
+    return;
+  }
+  for (const d of all) {
     const card = document.createElement('div');
     card.className = 'dev-card';
     const saved = savedByMac[(d.mac || '').toLowerCase()];
@@ -578,7 +584,7 @@ el('discover-pill').onclick = async () => {
     title.appendChild(badge);
     const meta = document.createElement('div');
     meta.className = 'dev-meta';
-    meta.textContent = `${d.ip} · ${d.mac || 'no mac'}`;
+    meta.textContent = `${d.ip} · ${d.mac || 'no mac'}${d.offline ? ' · offline' : ''}`;
     const actions = document.createElement('div');
     actions.className = 'dev-actions';
     const save = document.createElement('button');
@@ -618,17 +624,37 @@ el('discover-pill').onclick = async () => {
         if (e.key === 'Escape') { e.stopPropagation(); cancel.onclick(); }
       });
       cancel.onclick = () => {
-        actions.innerHTML = '';
-        actions.appendChild(save);
+        renderDiscoverCards(body);
       };
       actions.append(input, ok, cancel);
       input.focus();
       input.select();
     };
     actions.appendChild(save);
+    if (known) {
+      // two-click confirm — the webview has no confirm() dialog
+      const del = document.createElement('button');
+      del.className = 'pill';
+      del.textContent = 'Delete';
+      del.onclick = async () => {
+        if (del.textContent !== 'Sure?') { del.textContent = 'Sure?'; return; }
+        await DeleteDevice(d.mac);
+        S.cfg = await GetConfig();
+        buildSwitcher();
+        renderDiscoverCards(body);
+      };
+      actions.appendChild(del);
+    }
     card.append(title, meta, actions);
     body.appendChild(card);
   }
+}
+
+el('discover-pill').onclick = async () => {
+  const body = openOverlay('Discover');
+  body.innerHTML = '<p class="overlay-hint">scanning 255.255.255.255:38899 …</p>';
+  lastScan = await Discover();
+  renderDiscoverCards(body);
 };
 
 // ── groups management ──────────────────────────────────────────────
