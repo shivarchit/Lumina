@@ -131,22 +131,28 @@ html, body {
 /* control pills */
 .controls { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; margin-top: 32px; --wails-draggable: no-drag; }
 
-/* expandable glass panel (temp / color / scenes) */
-.panel {
-  margin-top: 20px;
-  background: var(--glass);
-  border: 1px solid var(--faint);
-  border-radius: 16px;
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  padding: 18px 24px;
-  max-width: 480px;
-  width: 90%;
+/* center stage: dial OR temp OR color OR scenes — one at a time (per design) */
+.center {
+  min-height: 250px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   --wails-draggable: no-drag;
 }
+.cview { display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.cview[hidden] { display: none; }
+
+.big-val {
+  font-family: var(--mono);
+  font-size: 46px;
+  font-weight: 200;
+  letter-spacing: -0.02em;
+  margin: 0 0 18px;
+}
+.big-val small { font-size: 20px; color: var(--dim); }
 
 #temp-range {
-  width: 100%;
+  width: 300px;
   appearance: none;
   -webkit-appearance: none;
   height: 8px;
@@ -167,22 +173,15 @@ html, body {
 .panel-hint {
   display: flex;
   justify-content: space-between;
+  width: 300px;
   font-family: var(--mono);
   font-size: 10px;
   color: var(--dim);
   margin-top: 8px;
 }
 
-.wheel-zone { position: relative; width: 170px; height: 170px; margin: 0 auto 14px; touch-action: none; }
-.wheel {
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  cursor: crosshair;
-  background: conic-gradient(#FF0033, #FF8C00, #FFD700, #32CD32, #00FFFF, #0000FF, #FF00FF, #FF0033);
-  -webkit-mask: radial-gradient(circle, transparent 42px, #000 43px);
-  mask: radial-gradient(circle, transparent 42px, #000 43px);
-}
+.wheel-zone { position: relative; width: 190px; height: 190px; margin: 0 auto 16px; touch-action: none; }
+#wheel-svg { position: absolute; inset: 0; cursor: crosshair; }
 .wheel-dot {
   position: absolute;
   width: 14px;
