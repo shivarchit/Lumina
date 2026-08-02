@@ -14,8 +14,8 @@ Darwin)
     APP="Lumina Desktop.app"
     ASSET="Lumina-Desktop-mac-universal.zip"
 
-    echo "Downloading ${ASSET} ..."
-    curl -fSL --progress-bar "${BASE}/${ASSET}" -o "$tmp/app.zip"
+    echo "Downloading ${ASSET} (a few MB — may take a minute on slow links) ..."
+    curl -fSL --retry 3 --progress-bar "${BASE}/${ASSET}" -o "$tmp/app.zip"
 
     echo "Installing to /Applications ..."
     ditto -x -k "$tmp/app.zip" "$tmp/extract"
@@ -41,8 +41,8 @@ Linux)
     esac
     ASSET="Lumina-Desktop-linux-${arch}.tar.gz"
 
-    echo "Downloading ${ASSET} ..."
-    curl -fSL --progress-bar "${BASE}/${ASSET}" -o "$tmp/app.tar.gz"
+    echo "Downloading ${ASSET} (a few MB — may take a minute on slow links) ..."
+    curl -fSL --retry 3 --progress-bar "${BASE}/${ASSET}" -o "$tmp/app.tar.gz"
     tar -xzf "$tmp/app.tar.gz" -C "$tmp"
 
     dest="/usr/local/bin"
