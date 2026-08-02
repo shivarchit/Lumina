@@ -24,6 +24,22 @@ type FanoutResult struct {
 	OK     int      `json:"ok"`
 	Failed []string `json:"failed"`
 	Ms     int64    `json:"ms"`
+	Hint   string   `json:"hint,omitempty"`
+}
+
+// hintFor maps a low-level send error to an actionable user hint.
+// macOS returns EHOSTUNREACH ("no route to host") for UDP to LAN peers when
+// the app's Local Network permission is denied — the single most common
+// failure after a fresh install.
+func hintFor(err error) string {
+	if err == nil {
+		return ""
+	}
+	msg := err.Error()
+	if strings.Contains(msg, "no route to host") || strings.Contains(msg, "host is down") {
+		return "macOS is blocking Local Network access — System Settings → Privacy & Security → Local Network → enable Lumina Desktop, then relaunch"
+	}
+	return ""
 }
 
 // StateResult is a device's live state, or the error fetching it.
@@ -34,6 +50,7 @@ type StateResult struct {
 	Temp       int    `json:"temp"`
 	Ms         int64  `json:"ms"`
 	Err        string `json:"err"`
+	Hint       string `json:"hint,omitempty"`
 }
 
 // App is the Wails-bound backend.
@@ -128,6 +145,9 @@ func fanout(targets []Target, method string, params map[string]interface{}) Fano
 				name = targets[r.idx].IP
 			}
 			res.Failed = append(res.Failed, name)
+			if res.Hint == "" {
+				res.Hint = hintFor(r.err)
+			}
 		} else {
 			res.OK++
 		}
@@ -144,6 +164,7 @@ func (a *App) GetState(ip, port string) StateResult {
 	out := StateResult{Ms: time.Since(start).Milliseconds()}
 	if err != nil {
 		out.Err = err.Error()
+		out.Hint = hintFor(err)
 		return out
 	}
 	out.Power = st.Power
