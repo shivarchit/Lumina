@@ -146,11 +146,11 @@ export namespace main {
 export namespace wiz {
 	
 	export class Device {
-	    IP: string;
-	    Mac: string;
-	    Name: string;
-	    Model: string;
-	    Firmware: string;
+	    ip: string;
+	    mac: string;
+	    name: string;
+	    model: string;
+	    firmware: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Device(source);
@@ -158,11 +158,11 @@ export namespace wiz {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.IP = source["IP"];
-	        this.Mac = source["Mac"];
-	        this.Name = source["Name"];
-	        this.Model = source["Model"];
-	        this.Firmware = source["Firmware"];
+	        this.ip = source["ip"];
+	        this.mac = source["mac"];
+	        this.name = source["name"];
+	        this.model = source["model"];
+	        this.firmware = source["firmware"];
 	    }
 	}
 

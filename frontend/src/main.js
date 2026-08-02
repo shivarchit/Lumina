@@ -414,8 +414,13 @@ el('discover-pill').onclick = async () => {
     save.onclick = async () => {
       const name = prompt('Device name', d.name || '');
       if (!name) return;
-      const err = await SaveDevice({ name, ip: d.ip, port: S.cfg.port, mac: d.mac });
-      if (err) { alert(err); return; }
+      try {
+        // Go errors surface as promise rejections through Wails bindings
+        await SaveDevice({ name, ip: d.ip, port: S.cfg.port, mac: d.mac });
+      } catch (err) {
+        alert(err);
+        return;
+      }
       S.cfg = await GetConfig();
       buildSwitcher();
       closeOverlay();
