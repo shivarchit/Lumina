@@ -228,6 +228,7 @@ html, body {
 .statusline b { font-weight: 600; }
 .statusline .ok { color: var(--ok); }
 .statusline .err { color: var(--err); }
+.statusline .void { font-style: italic; }
 
 .offline .dial-svg { opacity: 0.4; }
 .offline .dial-lab { opacity: 0.55; }
@@ -396,6 +397,24 @@ body.light .overlay { background: rgba(40, 37, 50, 0.6); }
 @keyframes flux { 0%, 100% { text-shadow: -2px 0 #F472B6, 2px 0 #7DD3FC; } 50% { text-shadow: 2px 0 #F472B6, -2px 0 #7DD3FC; } }
 .egg-100 { display: inline-block; animation: bloom 1.4s ease-in-out infinite; }
 @keyframes bloom { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.18); } }
+.egg-33 { display: inline-block; animation: spin33 1.8s linear infinite; }
+@keyframes spin33 { to { transform: rotate(360deg); } }
+.egg-77 { display: inline-block; animation: shake67 0.55s ease-in-out 3; }
+
+/* konami / party confetti */
+.confetti {
+  position: fixed;
+  top: -14px;
+  width: 8px;
+  height: 12px;
+  border-radius: 2px;
+  z-index: 50;
+  pointer-events: none;
+  animation: confetti-fall 2s linear forwards;
+}
+@keyframes confetti-fall { to { transform: translateY(110vh) rotate(540deg); opacity: 0.7; } }
+
 @media (prefers-reduced-motion: reduce) {
-  .egg-66, .egg-candle, .egg-42, .egg-50, .egg-88, .egg-100, .egg-dim { animation: none; }
+  .egg-66, .egg-candle, .egg-42, .egg-50, .egg-88, .egg-100, .egg-dim, .egg-33, .egg-77 { animation: none; }
+  .confetti { display: none; }
 }
