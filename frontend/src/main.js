@@ -267,7 +267,7 @@ function setBrightness(v) {
   S.brightness = v;
   S.power = true;
   render();
-  debouncedPilot({ dimming: v });
+  debouncedPilot({ dimming: v, state: true });
 }
 
 // ── expandable panels: temp / color / scenes ───────────────────────
@@ -309,7 +309,7 @@ el('temp-range').addEventListener('input', (e) => {
   el('temp-pill').textContent = `${S.temp}K`;
   el('temp-num').textContent = S.temp;
   render();
-  debouncedPilot({ temp: S.temp, dimming: S.brightness });
+  debouncedPilot({ temp: S.temp, dimming: S.brightness, state: true });
 });
 
 // color wheel: angle -> hue at fixed s/l, plus preset hex pills
@@ -329,7 +329,7 @@ function applyColor(hex) {
   render();
   buildHexRow();
   const n = parseInt(hex.slice(1), 16);
-  debouncedPilot({ r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255, dimming: S.brightness });
+  debouncedPilot({ r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255, dimming: S.brightness, state: true });
 }
 
 // SVG hue ring — WebKit renders CSS radial masks elliptically (same bug the
@@ -382,6 +382,7 @@ function buildHexRow() {
     b.textContent = h.toUpperCase();
     b.style.color = h;
     b.style.borderColor = h + '55';
+    b.style.background = '#11111B';
     if (h.toUpperCase() === (S.colorHex || '').toUpperCase()) b.classList.add('on');
     b.onclick = () => applyColor(h.toUpperCase());
     row.appendChild(b);
@@ -397,7 +398,7 @@ function buildScenes() {
     b.className = 'pill scene-pill';
     b.textContent = name;
     // each pill previews its scene's look
-    b.style.background = `linear-gradient(135deg, ${c1}2E, ${c2}52)`;
+    b.style.background = `linear-gradient(135deg, ${c1}59, ${c2}E6)`;
     b.style.borderColor = `${c1}59`;
     b.style.color = c1;
     b.onclick = async () => {
@@ -408,7 +409,7 @@ function buildScenes() {
       b.classList.add('on');
       b.style.boxShadow = `0 0 14px ${c1}66`;
       S.power = true;
-      const res = await SetPilot(S.target.targets, { sceneId: id });
+      const res = await SetPilot(S.target.targets, { sceneId: id, state: true });
       S.health = res.failed.length
         ? `${res.ok} ok · failed: ${res.failed.join(', ')}`
         : `scene ${name} · ${res.ms}ms`;
