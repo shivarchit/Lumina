@@ -3,7 +3,7 @@
   --dim: rgba(255, 255, 255, 0.35);
   --faint: rgba(255, 255, 255, 0.08);
   --glass: rgba(255, 255, 255, 0.03);
-  --accent: #CBA6F7;
+  --accent: #FFD9A0;
   --ok: #A6E3A1;
   --err: #F38BA8;
   --warm: #FFD9A0;
@@ -58,7 +58,7 @@ html, body {
   font-family: var(--mono);
   font-size: 11px;
   letter-spacing: 0.08em;
-  padding: 8px 18px;
+  padding: 9px 20px;
   border-radius: 999px;
   border: 1px solid var(--faint);
   color: rgba(255, 255, 255, 0.55);
@@ -124,7 +124,7 @@ html, body {
 .dial-lab {
   font-size: 11px;
   letter-spacing: 0.32em;
-  color: var(--accent);
+  color: var(--dim);
   text-transform: uppercase;
 }
 
@@ -315,7 +315,7 @@ body.light {
   --dim: rgba(0, 0, 0, 0.4);
   --faint: rgba(0, 0, 0, 0.1);
   --glass: rgba(0, 0, 0, 0.03);
-  --accent: #8839EF;
+  --accent: #A16207; /* amber-700: warm accent readable on light */
   --ok: #40A02B;
   --err: #D20F39;
   color: var(--text);
