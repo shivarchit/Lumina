@@ -260,11 +260,17 @@ function angleToBrightness(e) {
   return Math.max(1, Math.min(100, Math.round((rel / SWEEP_MAX) * 100)));
 }
 
+// clicks near a tick land exactly on it; drags stay precise
+function snapTick(v) {
+  for (const m of [25, 50, 75]) if (Math.abs(v - m) <= 2) return m;
+  return v;
+}
+
 zone.addEventListener('pointerdown', (e) => {
   dragging = true;
   zone.setPointerCapture(e.pointerId);
   const v = angleToBrightness(e);
-  if (v !== null) setBrightness(v);
+  if (v !== null) setBrightness(snapTick(v));
 });
 zone.addEventListener('pointermove', (e) => {
   if (!dragging) return;
@@ -382,6 +388,32 @@ function applyColor(hex) {
   buildHexRow();
   const n = parseInt(hex.slice(1), 16);
   debouncedPilot({ r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255, dimming: S.brightness, state: true });
+}
+
+// Tick marks at 25/50/75 on the dial track, with labels floated outside the
+// arc. Ticks live inside the rotated SVG (angles measured from the dash
+// origin); labels are HTML spans on the unrotated zone so text stays upright.
+function buildDialTicks() {
+  const svg = document.querySelector('.dial-svg');
+  const ns = 'http://www.w3.org/2000/svg';
+  const arc = el('dial-arc');
+  for (const f of [0.25, 0.5, 0.75]) {
+    const a = (f * SWEEP_MAX * Math.PI) / 180; // svg-local, clockwise from east
+    const line = document.createElementNS(ns, 'line');
+    line.setAttribute('x1', String(115 + 86 * Math.cos(a)));
+    line.setAttribute('y1', String(115 + 86 * Math.sin(a)));
+    line.setAttribute('x2', String(115 + 110 * Math.cos(a)));
+    line.setAttribute('y2', String(115 + 110 * Math.sin(a)));
+    line.setAttribute('class', 'dial-tick');
+    svg.insertBefore(line, arc); // under the filled arc, over the track
+    const label = document.createElement('span');
+    label.className = 'dial-tick-label';
+    label.textContent = String(f * 100);
+    const t = ((SWEEP_START + f * SWEEP_MAX) * Math.PI) / 180; // screen, clockwise from north
+    label.style.left = `${115 + 122 * Math.sin(t)}px`;
+    label.style.top = `${115 - 122 * Math.cos(t)}px`;
+    zone.appendChild(label);
+  }
 }
 
 // SVG hue ring — WebKit renders CSS radial masks elliptically (same bug the
@@ -774,6 +806,7 @@ el('themes-pill').onclick = () => {
   el('temp-pill').textContent = `${S.temp}K`;
   applyMode(S.cfg.theme === 'latte');
   buildSwitcher();
+  buildDialTicks();
   buildWheel();
   buildHexRow();
   buildScenes();
