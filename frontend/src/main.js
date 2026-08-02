@@ -411,19 +411,46 @@ el('discover-pill').onclick = async () => {
     const save = document.createElement('button');
     save.className = 'pill';
     save.textContent = known ? 'Rename…' : 'Save…';
-    save.onclick = async () => {
-      const name = prompt('Device name', d.name || '');
-      if (!name) return;
-      try {
-        // Go errors surface as promise rejections through Wails bindings
-        await SaveDevice({ name, ip: d.ip, port: S.cfg.port, mac: d.mac });
-      } catch (err) {
-        alert(err);
-        return;
-      }
-      S.cfg = await GetConfig();
-      buildSwitcher();
-      closeOverlay();
+    // No prompt()/alert() in the Wails webview — inline editor instead.
+    save.onclick = () => {
+      actions.innerHTML = '';
+      const input = document.createElement('input');
+      input.className = 'name-input';
+      input.placeholder = 'Device name';
+      input.value = d.name || '';
+      input.maxLength = 32;
+      const ok = document.createElement('button');
+      ok.className = 'pill';
+      ok.textContent = 'Save';
+      const cancel = document.createElement('button');
+      cancel.className = 'pill';
+      cancel.textContent = 'Cancel';
+      const commit = async () => {
+        const name = input.value.trim();
+        if (!name) { input.focus(); return; }
+        try {
+          // Go errors surface as promise rejections through Wails bindings
+          await SaveDevice({ name, ip: d.ip, port: S.cfg.port, mac: d.mac });
+        } catch (err) {
+          meta.textContent = String(err);
+          return;
+        }
+        S.cfg = await GetConfig();
+        buildSwitcher();
+        closeOverlay();
+      };
+      ok.onclick = commit;
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') commit();
+        if (e.key === 'Escape') { e.stopPropagation(); cancel.onclick(); }
+      });
+      cancel.onclick = () => {
+        actions.innerHTML = '';
+        actions.appendChild(save);
+      };
+      actions.append(input, ok, cancel);
+      input.focus();
+      input.select();
     };
     actions.appendChild(save);
     card.append(title, meta, actions);
