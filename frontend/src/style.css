@@ -131,6 +131,75 @@ html, body {
 /* control pills */
 .controls { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; margin-top: 32px; --wails-draggable: no-drag; }
 
+/* expandable glass panel (temp / color / scenes) */
+.panel {
+  margin-top: 20px;
+  background: var(--glass);
+  border: 1px solid var(--faint);
+  border-radius: 16px;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  padding: 18px 24px;
+  max-width: 480px;
+  width: 90%;
+  --wails-draggable: no-drag;
+}
+
+#temp-range {
+  width: 100%;
+  appearance: none;
+  -webkit-appearance: none;
+  height: 8px;
+  border-radius: 4px;
+  background: linear-gradient(90deg, #FFB56B, #FFE4CE, #E0F7FA);
+  cursor: pointer;
+}
+#temp-range::-webkit-slider-thumb {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--text);
+  border: 3px solid #0A0A0F;
+  box-shadow: 0 0 0 1px var(--faint);
+}
+.panel-hint {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--dim);
+  margin-top: 8px;
+}
+
+.wheel-zone { position: relative; width: 170px; height: 170px; margin: 0 auto 14px; touch-action: none; }
+.wheel {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  cursor: crosshair;
+  background: conic-gradient(#FF0033, #FF8C00, #FFD700, #32CD32, #00FFFF, #0000FF, #FF00FF, #FF0033);
+  -webkit-mask: radial-gradient(circle, transparent 42px, #000 43px);
+  mask: radial-gradient(circle, transparent 42px, #000 43px);
+}
+.wheel-dot {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: transparent;
+  border: 3px solid var(--text);
+  pointer-events: none;
+}
+.hexrow { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+.hex-pill { padding: 5px 12px; font-size: 10px; }
+
+.scene-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.scene-pill { text-align: center; }
+.scene-pill.on { border-color: rgba(250, 179, 135, 0.7); color: #FAB387; background: rgba(250, 179, 135, 0.07); }
+@media (max-width: 560px) { .scene-grid { grid-template-columns: repeat(3, 1fr); } }
+
 /* status glass card */
 .statusline {
   margin-top: 26px;
