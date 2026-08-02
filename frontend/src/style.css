@@ -1,26 +1,159 @@
-html {
-    background-color: rgba(27, 38, 54, 1);
-    text-align: center;
-    color: white;
+:root {
+  --text: #F8F8F4;
+  --dim: rgba(255, 255, 255, 0.35);
+  --faint: rgba(255, 255, 255, 0.08);
+  --glass: rgba(255, 255, 255, 0.03);
+  --accent: #CBA6F7;
+  --ok: #A6E3A1;
+  --err: #F38BA8;
+  --warm: #FFD9A0;
+  --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+  --sans: -apple-system, "SF Pro Display", "Segoe UI", Roboto, Ubuntu, sans-serif;
 }
 
-body {
-    margin: 0;
-    color: white;
-    font-family: "Nunito", -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto",
-    "Oxygen", "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue",
-    sans-serif;
+* { box-sizing: border-box; user-select: none; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: linear-gradient(180deg, #0A0A0F, #020203);
+  color: var(--text);
+  font-family: var(--sans);
+  overflow: hidden;
 }
 
-@font-face {
-    font-family: "Nunito";
-    font-style: normal;
-    font-weight: 400;
-    src: local(""),
-    url("assets/fonts/nunito-v16-latin-regular.woff2") format("woff2");
+#app { height: 100%; position: relative; }
+
+/* ambient blobs mirror the real light */
+.blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(46px);
+  pointer-events: none;
+  transition: background 600ms ease, opacity 600ms ease;
+}
+#blob-a { width: 420px; height: 420px; top: -120px; left: 12%; }
+#blob-b { width: 300px; height: 300px; bottom: -90px; right: 8%; }
+
+.stage {
+  position: relative;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 34px 28px;
 }
 
-#app {
-    height: 100vh;
-    text-align: center;
+/* target switcher */
+.switcher {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-bottom: 30px;
+  --wails-draggable: no-drag;
+}
+
+.pill {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  padding: 8px 18px;
+  border-radius: 999px;
+  border: 1px solid var(--faint);
+  color: rgba(255, 255, 255, 0.55);
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.02);
+  transition: border-color 200ms, color 200ms, background 200ms;
+}
+.pill:hover { border-color: rgba(255, 217, 160, 0.5); color: var(--warm); }
+.pill.on {
+  border-color: rgba(255, 217, 160, 0.6);
+  color: var(--warm);
+  background: rgba(255, 217, 160, 0.06);
+}
+.pill:focus-visible { outline: 1px solid var(--warm); outline-offset: 2px; }
+
+.target-name {
+  font-size: 15px;
+  font-weight: 300;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.85);
+  margin: 0 0 4px;
+  text-align: center;
+}
+.target-sub {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--dim);
+  text-align: center;
+  margin: 0 0 28px;
+  min-height: 14px;
+}
+
+/* brightness dial */
+.dial-zone { position: relative; width: 230px; height: 230px; touch-action: none; --wails-draggable: no-drag; }
+.dial {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  cursor: grab;
+  -webkit-mask: radial-gradient(circle, transparent 84px, #000 85px);
+  mask: radial-gradient(circle, transparent 84px, #000 85px);
+  transition: opacity 300ms;
+}
+.dial:active { cursor: grabbing; }
+.dial-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  pointer-events: none;
+}
+.dial-val {
+  font-family: var(--mono);
+  font-size: 46px;
+  font-weight: 200;
+  letter-spacing: -0.02em;
+}
+.dial-val small { font-size: 20px; color: var(--dim); }
+.dial-lab {
+  font-size: 11px;
+  letter-spacing: 0.32em;
+  color: var(--dim);
+  text-transform: uppercase;
+}
+
+/* control pills */
+.controls { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; margin-top: 32px; --wails-draggable: no-drag; }
+
+/* status glass card */
+.statusline {
+  margin-top: 26px;
+  background: var(--glass);
+  border: 1px solid var(--faint);
+  border-radius: 16px;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  padding: 12px 22px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.45);
+  max-width: 90%;
+  text-align: center;
+  line-height: 1.9;
+  --wails-draggable: no-drag;
+}
+.statusline b { font-weight: 600; }
+.statusline .ok { color: var(--ok); }
+.statusline .err { color: var(--err); }
+
+.offline { opacity: 0.35; }
+
+@media (prefers-reduced-motion: reduce) {
+  .blob, .pill, .dial { transition: none; }
 }
