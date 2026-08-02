@@ -66,11 +66,12 @@ html, body {
   background: rgba(255, 255, 255, 0.02);
   transition: border-color 200ms, color 200ms, background 200ms;
 }
-.pill:hover { border-color: rgba(255, 217, 160, 0.5); color: var(--warm); }
+/* theme vars via color-mix so switching themes visibly recolors the chrome */
+.pill:hover { border-color: color-mix(in srgb, var(--warm) 50%, transparent); color: var(--warm); }
 .pill.on {
-  border-color: rgba(255, 217, 160, 0.6);
+  border-color: color-mix(in srgb, var(--warm) 60%, transparent);
   color: var(--warm);
-  background: rgba(255, 217, 160, 0.06);
+  background: color-mix(in srgb, var(--warm) 7%, transparent);
 }
 .pill:focus-visible { outline: 1px solid var(--warm); outline-offset: 2px; }
 
@@ -100,7 +101,7 @@ html, body {
   cursor: pointer; /* click sets the value; drag refines */
   transform: rotate(130deg); /* dash origin 3 o'clock -> arc start at 220 deg from north */
 }
-.dial-svg circle { fill: none; stroke-width: 16; stroke-linecap: round; }
+.dial-svg circle { fill: none; stroke-width: 26; stroke-linecap: round; }
 .dial-track { stroke: rgba(255, 255, 255, 0.07); stroke-dasharray: 280 80; }
 #dial-arc { transition: stroke 300ms; }
 .dial-center {

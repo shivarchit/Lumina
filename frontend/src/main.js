@@ -444,14 +444,19 @@ el('discover-pill').onclick = async () => {
     body.innerHTML = '<p class="overlay-hint">no bulbs found — same network as the bulbs?</p>';
     return;
   }
-  const savedMacs = new Set((S.cfg.savedDevices || []).map((d) => (d.mac || '').toLowerCase()));
+  // overlay the user's saved names by MAC — never show/overwrite them with
+  // the firmware module name
+  const savedByMac = {};
+  for (const s of S.cfg.savedDevices || []) savedByMac[(s.mac || '').toLowerCase()] = s;
   for (const d of devices) {
     const card = document.createElement('div');
     card.className = 'dev-card';
-    const known = savedMacs.has((d.mac || '').toLowerCase());
+    const saved = savedByMac[(d.mac || '').toLowerCase()];
+    const known = !!saved;
+    const displayName = (saved && saved.name) || d.name || d.ip;
     const title = document.createElement('div');
     title.className = 'dev-title';
-    title.textContent = d.name || d.ip;
+    title.textContent = displayName;
     const badge = document.createElement('span');
     badge.className = 'dev-badge' + (known ? ' saved' : '');
     badge.textContent = known ? 'SAVED' : 'NEW';
@@ -470,7 +475,7 @@ el('discover-pill').onclick = async () => {
       const input = document.createElement('input');
       input.className = 'name-input';
       input.placeholder = 'Device name';
-      input.value = d.name || '';
+      input.value = displayName;
       input.maxLength = 32;
       const ok = document.createElement('button');
       ok.className = 'pill';
