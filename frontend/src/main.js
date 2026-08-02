@@ -94,7 +94,7 @@ function render() {
   el('dial-num').textContent = S.brightness;
   el('dial-zone').classList.toggle('offline', !S.power);
 
-  const alpha = S.power ? 0.06 + (S.brightness / 100) * 0.09 : 0;
+  const alpha = S.power ? 0.14 + (S.brightness / 100) * 0.2 : 0;
   const glow = c || '#FFD9A0';
   el('blob-a').style.background = `radial-gradient(closest-side, ${hexToRgba(glow, alpha)}, transparent 70%)`;
   el('blob-b').style.background = `radial-gradient(closest-side, ${hexToRgba(glow, alpha * 0.6)}, transparent 70%)`;
@@ -228,10 +228,15 @@ function angleToBrightness(e) {
   const r = zone.getBoundingClientRect();
   const dx = e.clientX - (r.left + r.width / 2);
   const dy = e.clientY - (r.top + r.height / 2);
-  let deg = (Math.atan2(dy, dx) * 180) / Math.PI + 90; // 0 = top
-  deg = (deg - (SWEEP_START - 180) + 360) % 360;       // rotate into sweep space
-  if (deg > SWEEP_MAX) return null;                    // in the dead zone
-  return Math.max(1, Math.min(100, Math.round((deg / SWEEP_MAX) * 100)));
+  // clockwise angle from north, 0..360
+  const fromNorth = ((Math.atan2(dy, dx) * 180) / Math.PI + 90 + 360) % 360;
+  // rotate so the arc start (220 deg from north) is zero
+  const rel = (fromNorth - SWEEP_START + 360) % 360;
+  if (rel > SWEEP_MAX) {
+    // clicks in the bottom gap snap to the nearest end
+    return rel - SWEEP_MAX < 360 - rel ? 100 : 1;
+  }
+  return Math.max(1, Math.min(100, Math.round((rel / SWEEP_MAX) * 100)));
 }
 
 zone.addEventListener('pointerdown', (e) => {
@@ -255,10 +260,14 @@ function setBrightness(v) {
 }
 
 // ── expandable panels: temp / color / scenes ───────────────────────
+// name, sceneId, representative gradient (what the scene roughly looks like)
 const SCENES = [
-  ['Ocean', 1], ['Romance', 2], ['Sunset', 3], ['Party', 4],
-  ['Fireplace', 5], ['Cozy', 6], ['Forest', 7], ['Pastel', 8],
-  ['Wake-up', 9], ['Bedtime', 10], ['Daylight', 12], ['Focus', 15],
+  ['Ocean', 1, '#0891B2', '#164E63'], ['Romance', 2, '#F472B6', '#9D174D'],
+  ['Sunset', 3, '#FB923C', '#B91C1C'], ['Party', 4, '#E879F9', '#4F46E5'],
+  ['Fireplace', 5, '#F97316', '#7C2D12'], ['Cozy', 6, '#FDBA74', '#92400E'],
+  ['Forest', 7, '#4ADE80', '#14532D'], ['Pastel', 8, '#F9A8D4', '#93C5FD'],
+  ['Wake-up', 9, '#FDE68A', '#F59E0B'], ['Bedtime', 10, '#818CF8', '#1E1B4B'],
+  ['Daylight', 12, '#FEF3C7', '#FCD34D'], ['Focus', 15, '#E0F2FE', '#7DD3FC'],
 ];
 const PRESET_HEXES = ['#FFD9A0', '#CBA6F7', '#89B4FA', '#A6E3A1', '#F38BA8', '#FFD700', '#FF8C00', '#00FFFF'];
 
@@ -372,13 +381,21 @@ function buildHexRow() {
 function buildScenes() {
   const grid = el('scene-grid');
   grid.innerHTML = '';
-  for (const [name, id] of SCENES) {
+  for (const [name, id, c1, c2] of SCENES) {
     const b = document.createElement('button');
     b.className = 'pill scene-pill';
     b.textContent = name;
+    // each pill previews its scene's look
+    b.style.background = `linear-gradient(135deg, ${c1}2E, ${c2}52)`;
+    b.style.borderColor = `${c1}59`;
+    b.style.color = c1;
     b.onclick = async () => {
-      grid.querySelectorAll('.pill').forEach((p) => p.classList.remove('on'));
+      grid.querySelectorAll('.scene-pill').forEach((p) => {
+        p.classList.remove('on');
+        p.style.boxShadow = '';
+      });
       b.classList.add('on');
+      b.style.boxShadow = `0 0 14px ${c1}66`;
       S.power = true;
       const res = await SetPilot(S.target.targets, { sceneId: id });
       S.health = res.failed.length
