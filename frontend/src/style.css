@@ -286,3 +286,6 @@ html, body {
 @media (prefers-reduced-motion: reduce) {
   .blob, .pill, .dial { transition: none; }
 }
+
+/* the hidden attribute must beat display:flex */
+.overlay[hidden] { display: none; }
