@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"net"
 	"strconv"
 	"testing"
@@ -65,6 +66,19 @@ func TestSaveGroupRejectsEmptyName(t *testing.T) {
 	a := &App{}
 	if err := a.SaveGroup(config.Group{Name: "  "}); err == nil {
 		t.Fatal("expected error for empty group name")
+	}
+}
+
+func TestHintForLocalNetworkDenial(t *testing.T) {
+	err := fmt.Errorf("write udp4 0.0.0.0:52341->10.0.0.2:38899: sendto: no route to host")
+	if hintFor(err) == "" {
+		t.Fatal("expected a Local Network hint for EHOSTUNREACH")
+	}
+	if hintFor(fmt.Errorf("read: i/o timeout")) != "" {
+		t.Fatal("plain timeout must not claim a permission problem")
+	}
+	if hintFor(nil) != "" {
+		t.Fatal("nil error must yield no hint")
 	}
 }
 
