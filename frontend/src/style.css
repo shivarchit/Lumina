@@ -331,3 +331,36 @@ body.light .overlay { background: rgba(40, 37, 50, 0.6); }
   cursor: pointer;
 }
 .member-row input[type="checkbox"] { accent-color: var(--accent); cursor: pointer; }
+
+/* easter eggs: 67 and 69 on the dial */
+.egg-toast {
+  position: absolute;
+  bottom: 150px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  padding: 10px 22px;
+  font-family: var(--mono);
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  pointer-events: none;
+  z-index: 40;
+}
+.egg-toast[hidden] { display: none; }
+.egg-hand { display: inline-block; font-size: 19px; }
+.hand-l { animation: jugL 0.55s ease-in-out infinite; }
+.hand-r { animation: jugR 0.55s ease-in-out infinite; }
+@keyframes jugL { 0%, 100% { transform: translateY(-4px); } 50% { transform: translateY(4px); } }
+@keyframes jugR { 0%, 100% { transform: translateY(4px); } 50% { transform: translateY(-4px); } }
+.egg-67-text { animation: shake67 0.55s ease-in-out infinite; font-weight: 700; letter-spacing: 0.06em; }
+@keyframes shake67 { 0%, 100% { transform: rotate(-2deg) scale(1); } 50% { transform: rotate(2deg) scale(1.08); } }
+.egg-nice { animation: nicefade 2.4s ease-in-out forwards; }
+@keyframes nicefade { 0%, 12% { opacity: 0; transform: translateY(6px); } 28%, 78% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .hand-l, .hand-r, .egg-67-text, .egg-nice { animation: none; } }
