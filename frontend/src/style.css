@@ -308,28 +308,17 @@ html, body {
 
 .pill.back { border-color: rgba(255, 255, 255, 0.2); color: rgba(255, 255, 255, 0.75); }
 
-/* light mode — one toggle, not a theme system */
+/* dusk mode — muted twilight, same light-ink chrome as night */
 body.light {
-  background: linear-gradient(180deg, #E9E6F0, #D6D2DF);
-  --text: #1E1E2E;
-  --dim: rgba(0, 0, 0, 0.4);
-  --faint: rgba(0, 0, 0, 0.1);
-  --glass: rgba(0, 0, 0, 0.03);
-  --accent: #A16207; /* amber-700: warm accent readable on light */
-  --ok: #40A02B;
-  --err: #D20F39;
-  color: var(--text);
+  background: linear-gradient(180deg, #6E6880, #4B4659);
+  --dim: rgba(255, 255, 255, 0.55);
+  --faint: rgba(255, 255, 255, 0.16);
+  --glass: rgba(255, 255, 255, 0.05);
 }
-body.light .pill { color: rgba(0, 0, 0, 0.55); background: rgba(0, 0, 0, 0.02); }
-body.light .pill.on { color: var(--accent); }
-body.light .target-name { color: rgba(0, 0, 0, 0.8); }
-body.light .dial-track { stroke: rgba(0, 0, 0, 0.16); }
-body.light .statusline { color: rgba(0, 0, 0, 0.55); }
-body.light .overlay { background: rgba(240, 238, 246, 0.6); }
-body.light .overlay-card { background: rgba(252, 251, 254, 0.95); }
-body.light .overlay-head { color: rgba(0, 0, 0, 0.65); }
-body.light .name-input { background: rgba(0, 0, 0, 0.04); color: var(--text); }
-body.light .blob { opacity: 0.7; }
+body.light .statusline { color: rgba(255, 255, 255, 0.62); }
+body.light .dial-track { stroke: rgba(255, 255, 255, 0.14); }
+body.light .overlay { background: rgba(40, 37, 50, 0.6); }
+
 
 /* group member rows */
 .member-row {
@@ -342,13 +331,3 @@ body.light .blob { opacity: 0.7; }
   cursor: pointer;
 }
 .member-row input[type="checkbox"] { accent-color: var(--accent); cursor: pointer; }
-
-/* light-mode readability */
-body.light .blob { opacity: 0.45; }
-body.light .statusline b {
-  background: rgba(30, 30, 46, 0.85);
-  padding: 1px 8px;
-  border-radius: 5px;
-}
-body.light .approw .pill,
-body.light .target-sub { color: rgba(0, 0, 0, 0.5); }
