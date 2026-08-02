@@ -49,6 +49,7 @@ document.querySelector('#app').innerHTML = `
       <div class="cview" id="view-scenes" hidden><div class="scene-grid" id="scene-grid"></div></div>
     </div>
     <div class="controls">
+      <button class="pill back" id="back-pill" hidden>← Back</button>
       <button class="pill on" id="power-pill">⏻ On</button>
       <button class="pill" id="temp-pill" data-panel="temp">4000K</button>
       <button class="pill" id="color-pill" data-panel="color">Color</button>
@@ -268,6 +269,7 @@ let openPanel = null;
 function togglePanel(name) {
   openPanel = openPanel === name ? null : name;
   el('view-dial').hidden = openPanel !== null;
+  el('back-pill').hidden = openPanel === null;
   for (const p of ['temp', 'color', 'scenes']) {
     el(`view-${p}`).hidden = p !== openPanel;
     el(`${p}-pill`).classList.toggle('on', p === openPanel);
@@ -277,6 +279,7 @@ function togglePanel(name) {
 for (const p of ['temp', 'color', 'scenes']) {
   el(`${p}-pill`).addEventListener('click', () => togglePanel(p));
 }
+el('back-pill').addEventListener('click', () => { if (openPanel) togglePanel(openPanel); });
 
 // temp slider
 el('temp-range').addEventListener('input', (e) => {
