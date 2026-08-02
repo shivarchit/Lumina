@@ -65,6 +65,7 @@ document.querySelector('#app').innerHTML = `
       <button class="pill" id="scenes-pill" data-panel="scenes">Scenes</button>
       <button class="pill" id="timer-pill" data-panel="timer">Timer</button>
     </div>
+    <div class="egg-toast" id="egg-toast" hidden></div>
     <div class="statusline" id="statusline">connecting…</div>
     <div class="approw">
       <button class="pill" id="discover-pill">Discover</button>
@@ -263,8 +264,32 @@ zone.addEventListener('pointermove', (e) => {
 });
 zone.addEventListener('pointerup', () => { dragging = false; });
 
+// ── easter eggs: the dial knows ────────────────────────────────────
+let eggTimer = null;
+let lastEgg = 0;
+
+function maybeEgg(v) {
+  clearTimeout(eggTimer);
+  if (v !== 67 && v !== 69) { lastEgg = 0; return; }
+  eggTimer = setTimeout(() => {
+    if (S.brightness !== v || lastEgg === v) return; // moved on, or already fired
+    lastEgg = v;
+    showEgg(v);
+  }, 300); // fires on settle, not on drag-through
+}
+
+function showEgg(v) {
+  const t = el('egg-toast');
+  t.innerHTML = v === 67
+    ? '<span class="egg-hand hand-l">🫷</span><span class="egg-67-text">SIX SEVENNN</span><span class="egg-hand hand-r">🫸</span>'
+    : '<span class="egg-nice">nice.</span>';
+  t.hidden = false;
+  setTimeout(() => { t.hidden = true; }, 2500);
+}
+
 function setBrightness(v) {
   S.brightness = v;
+  maybeEgg(v);
   S.power = true;
   render();
   debouncedPilot({ dimming: v, state: true });
