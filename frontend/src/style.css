@@ -97,10 +97,9 @@ html, body {
 .dial-svg {
   position: absolute;
   inset: 0;
-  cursor: grab;
+  cursor: pointer; /* click sets the value; drag refines */
   transform: rotate(130deg); /* dash origin 3 o'clock -> arc start at 220 deg from north */
 }
-.dial-svg:active { cursor: grabbing; }
 .dial-svg circle { fill: none; stroke-width: 16; stroke-linecap: round; }
 .dial-track { stroke: rgba(255, 255, 255, 0.07); stroke-dasharray: 280 80; }
 #dial-arc { transition: stroke 300ms; }
@@ -304,3 +303,5 @@ html, body {
   outline: none;
 }
 .name-input:focus { border-color: var(--warm); }
+
+.pill.back { border-color: rgba(255, 255, 255, 0.2); color: rgba(255, 255, 255, 0.75); }
