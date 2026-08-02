@@ -317,9 +317,9 @@ html, body {
 
 .pill.back { border-color: rgba(255, 255, 255, 0.2); color: rgba(255, 255, 255, 0.75); }
 
-/* dusk mode — muted twilight, same light-ink chrome as night */
+/* dusk mode — muted twilight, same light-ink chrome as night.
+   (background gradient comes from the JS theme table) */
 body.light {
-  background: linear-gradient(180deg, #6E6880, #4B4659);
   --dim: rgba(255, 255, 255, 0.55);
   --faint: rgba(255, 255, 255, 0.16);
   --glass: rgba(255, 255, 255, 0.05);
