@@ -681,7 +681,7 @@ el('groups-pill').onclick = renderGroupsOverlay;
 // system understands the same config value.
 function applyMode(light) {
   document.body.classList.toggle('light', light);
-  el('themes-pill').textContent = light ? '☾ Dark' : '☀ Light';
+  el('themes-pill').textContent = light ? '☾ Night' : '⛅ Dusk';
 }
 
 el('themes-pill').onclick = () => {
