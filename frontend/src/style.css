@@ -364,3 +364,29 @@ body.light .overlay { background: rgba(40, 37, 50, 0.6); }
 .egg-nice { animation: nicefade 2.4s ease-in-out forwards; }
 @keyframes nicefade { 0%, 12% { opacity: 0; transform: translateY(6px); } 28%, 78% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .hand-l, .hand-r, .egg-67-text, .egg-nice { animation: none; } }
+
+/* egg basket round two */
+.egg-dim {
+  position: fixed;
+  inset: 0;
+  background: #000;
+  pointer-events: none;
+  z-index: 35;
+  animation: dim66 2.5s ease-in-out forwards;
+}
+.egg-dim[hidden] { display: none; }
+@keyframes dim66 { 0%, 15% { opacity: 0; } 35%, 70% { opacity: 0.55; } 100% { opacity: 0; } }
+.egg-66 { color: #FF3B30; font-weight: 700; letter-spacing: 0.1em; animation: saber 1.2s ease-in-out infinite; }
+@keyframes saber { 0%, 100% { text-shadow: 0 0 8px rgba(255, 59, 48, 0.6); } 50% { text-shadow: 0 0 22px rgba(255, 59, 48, 1); } }
+.egg-candle { display: inline-block; animation: flick 0.18s ease-in-out infinite alternate; }
+@keyframes flick { 0% { opacity: 1; transform: scale(1); } 100% { opacity: 0.55; transform: scale(0.92) rotate(-3deg); } }
+.egg-42 { font-style: italic; color: rgba(255, 255, 255, 0.75); animation: nicefade 2.4s ease-in-out forwards; }
+.egg-50 { display: inline-block; animation: balance 2.2s ease-in-out infinite; }
+@keyframes balance { 0%, 100% { transform: rotate(-3deg); } 50% { transform: rotate(3deg); } }
+.egg-88 { font-weight: 700; color: #7DD3FC; animation: flux 0.3s linear infinite; }
+@keyframes flux { 0%, 100% { text-shadow: -2px 0 #F472B6, 2px 0 #7DD3FC; } 50% { text-shadow: 2px 0 #F472B6, -2px 0 #7DD3FC; } }
+.egg-100 { display: inline-block; animation: bloom 1.4s ease-in-out infinite; }
+@keyframes bloom { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.18); } }
+@media (prefers-reduced-motion: reduce) {
+  .egg-66, .egg-candle, .egg-42, .egg-50, .egg-88, .egg-100, .egg-dim { animation: none; }
+}
