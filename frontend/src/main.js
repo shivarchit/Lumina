@@ -20,6 +20,7 @@ const S = {
 document.querySelector('#app').innerHTML = `
   <span class="blob" id="blob-a"></span>
   <span class="blob" id="blob-b"></span>
+  <span class="blob" id="blob-theme"></span>
   <div class="stage">
     <nav class="switcher" id="switcher"></nav>
     <p class="target-name" id="target-name">—</p>
@@ -533,6 +534,14 @@ function applyThemeVars(name) {
   r.setProperty('--ok', t.ok);
   r.setProperty('--err', t.err);
   r.setProperty('--warm', t.warm);
+  // The theme paints the room, not just outlines: accent-washed canvas,
+  // accent aura blob, accent-tinted glass. (Computed here — no color-mix.)
+  r.setProperty('--accent-soft', hexToRgba(t.accent, 0.30));
+  r.setProperty('--accent-faint', hexToRgba(t.accent, 0.10));
+  document.body.style.background =
+    `linear-gradient(180deg, ${hexToRgba(t.accent, 0.17)}, #0A0A0F 46%, #020203)`;
+  el('blob-theme').style.background =
+    `radial-gradient(closest-side, ${hexToRgba(t.accent, 0.24)}, transparent 70%)`;
 }
 
 el('themes-pill').onclick = () => {
