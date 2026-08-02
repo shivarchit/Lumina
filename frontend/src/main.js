@@ -47,6 +47,15 @@ document.querySelector('#app').innerHTML = `
         <div class="hexrow" id="hexrow"></div>
       </div>
       <div class="cview" id="view-scenes" hidden><div class="scene-grid" id="scene-grid"></div></div>
+      <div class="cview" id="view-timer" hidden>
+        <p class="big-val" id="timer-display">–</p>
+        <div class="hexrow" id="timer-presets"></div>
+        <div class="hexrow" style="margin-top:12px">
+          <input type="number" class="name-input" id="timer-mins" min="1" max="720" placeholder="minutes" style="width:110px" />
+          <button class="pill" id="timer-start">Start</button>
+          <button class="pill" id="timer-cancel" hidden>Cancel</button>
+        </div>
+      </div>
     </div>
     <div class="controls">
       <button class="pill back" id="back-pill" hidden>← Back</button>
@@ -54,6 +63,7 @@ document.querySelector('#app').innerHTML = `
       <button class="pill" id="temp-pill" data-panel="temp">4000K</button>
       <button class="pill" id="color-pill" data-panel="color">Color</button>
       <button class="pill" id="scenes-pill" data-panel="scenes">Scenes</button>
+      <button class="pill" id="timer-pill" data-panel="timer">Timer</button>
     </div>
     <div class="statusline" id="statusline">connecting…</div>
     <div class="approw">
@@ -279,13 +289,13 @@ function togglePanel(name) {
   openPanel = openPanel === name ? null : name;
   el('view-dial').hidden = openPanel !== null;
   el('back-pill').hidden = openPanel === null;
-  for (const p of ['temp', 'color', 'scenes']) {
+  for (const p of ['temp', 'color', 'scenes', 'timer']) {
     el(`view-${p}`).hidden = p !== openPanel;
     el(`${p}-pill`).classList.toggle('on', p === openPanel);
   }
 }
 
-for (const p of ['temp', 'color', 'scenes']) {
+for (const p of ['temp', 'color', 'scenes', 'timer']) {
   el(`${p}-pill`).addEventListener('click', () => togglePanel(p));
 }
 el('back-pill').addEventListener('click', () => { if (openPanel) togglePanel(openPanel); });
@@ -406,6 +416,61 @@ function buildScenes() {
     grid.appendChild(b);
   }
 }
+
+// ── sleep timer ────────────────────────────────────────────────────
+// ponytail: in-app timer only — dies if the app quits. The TUI/CLI covers
+// detached timers (lumina --timer / cron).
+const T = { until: 0, handle: null, targetName: '' };
+
+function timerTick() {
+  if (!T.until) { el('timer-display').textContent = '–'; return; }
+  const left = Math.max(0, T.until - Date.now());
+  const m = Math.floor(left / 60000);
+  const s = Math.floor((left % 60000) / 1000);
+  el('timer-display').textContent = `${m}:${String(s).padStart(2, '0')}`;
+}
+setInterval(timerTick, 1000);
+
+function startTimer(mins) {
+  cancelTimer();
+  const targets = S.target.targets;
+  T.until = Date.now() + mins * 60000;
+  T.targetName = S.target.name;
+  T.handle = setTimeout(async () => {
+    const res = await SetPower(targets, false);
+    S.power = false;
+    S.health = `sleep: ${T.targetName} off (${res.ok} ok)`;
+    cancelTimer();
+    render();
+  }, mins * 60000);
+  el('timer-cancel').hidden = false;
+  el('timer-pill').textContent = `Timer ·`;
+  S.health = `sleep in ${mins}m → ${T.targetName}`;
+  timerTick();
+  render();
+}
+
+function cancelTimer() {
+  if (T.handle) clearTimeout(T.handle);
+  T.handle = null;
+  T.until = 0;
+  el('timer-cancel').hidden = true;
+  el('timer-pill').textContent = 'Timer';
+  timerTick();
+}
+
+for (const mins of [15, 30, 60]) {
+  const b = document.createElement('button');
+  b.className = 'pill';
+  b.textContent = `${mins}m`;
+  b.onclick = () => startTimer(mins);
+  el('timer-presets').appendChild(b);
+}
+el('timer-start').onclick = () => {
+  const mins = parseInt(el('timer-mins').value, 10);
+  if (mins >= 1 && mins <= 720) startTimer(mins);
+};
+el('timer-cancel').onclick = () => { cancelTimer(); S.health = 'sleep timer cancelled'; render(); };
 
 // ── power ──────────────────────────────────────────────────────────
 el('power-pill').onclick = async () => {
