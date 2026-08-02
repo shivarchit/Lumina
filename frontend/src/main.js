@@ -73,6 +73,7 @@ document.querySelector('#app').innerHTML = `
       <button class="pill" id="themes-pill">Themes</button>
     </div>
   </div>
+  <div class="egg-dim" id="egg-dim" hidden aria-hidden="true"></div>
   <div class="overlay" id="overlay" hidden>
     <div class="overlay-card">
       <div class="overlay-head"><span id="overlay-title"></span><button class="pill" id="overlay-close">Esc</button></div>
@@ -268,9 +269,20 @@ zone.addEventListener('pointerup', () => { dragging = false; });
 let eggTimer = null;
 let lastEgg = 0;
 
+const EGG_HTML = {
+  1: '<span class="egg-candle">🕯️</span> barely holding on',
+  42: '<span class="egg-42">the answer to everything.</span>',
+  50: '<span class="egg-50">✋ perfectly balanced, as all things should be</span>',
+  66: '<span class="egg-66">EXECUTE ORDER 66.</span>',
+  67: '<span class="egg-hand hand-l">🫷</span><span class="egg-67-text">SIX SEVENNN</span><span class="egg-hand hand-r">🫸</span>',
+  69: '<span class="egg-nice">nice.</span>',
+  88: '<span class="egg-88">88 MPH — GREAT SCOTT! ⚡</span>',
+  100: '<span class="egg-100">🌞</span>&nbsp;MAXIMUM POWER',
+};
+
 function maybeEgg(v) {
   clearTimeout(eggTimer);
-  if (v !== 67 && v !== 69) { lastEgg = 0; return; }
+  if (!(v in EGG_HTML)) { lastEgg = 0; return; }
   eggTimer = setTimeout(() => {
     if (S.brightness !== v || lastEgg === v) return; // moved on, or already fired
     lastEgg = v;
@@ -280,10 +292,17 @@ function maybeEgg(v) {
 
 function showEgg(v) {
   const t = el('egg-toast');
-  t.innerHTML = v === 67
-    ? '<span class="egg-hand hand-l">🫷</span><span class="egg-67-text">SIX SEVENNN</span><span class="egg-hand hand-r">🫸</span>'
-    : '<span class="egg-nice">nice.</span>';
+  t.innerHTML = EGG_HTML[v];
   t.hidden = false;
+  if (v === 66) {
+    // the room obeys: brief blackout behind the toast
+    const d = el('egg-dim');
+    d.hidden = false;
+    d.style.animation = 'none';
+    void d.offsetWidth; // restart the animation on repeat firings
+    d.style.animation = '';
+    setTimeout(() => { d.hidden = true; }, 2500);
+  }
   setTimeout(() => { t.hidden = true; }, 2500);
 }
 
