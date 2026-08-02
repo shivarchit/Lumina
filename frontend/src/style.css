@@ -66,14 +66,14 @@ html, body {
   background: rgba(255, 255, 255, 0.02);
   transition: border-color 200ms, color 200ms, background 200ms;
 }
-/* theme vars via color-mix so switching themes visibly recolors the chrome */
-.pill:hover { border-color: color-mix(in srgb, var(--warm) 50%, transparent); color: var(--warm); }
+/* chrome follows the theme accent — distinct across all six palettes */
+.pill:hover { border-color: var(--accent); color: var(--accent); }
 .pill.on {
-  border-color: color-mix(in srgb, var(--warm) 60%, transparent);
-  color: var(--warm);
-  background: color-mix(in srgb, var(--warm) 7%, transparent);
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgba(255, 255, 255, 0.04);
 }
-.pill:focus-visible { outline: 1px solid var(--warm); outline-offset: 2px; }
+.pill:focus-visible { outline: 1px solid var(--accent); outline-offset: 2px; }
 
 .target-name {
   font-size: 15px;
@@ -124,7 +124,7 @@ html, body {
 .dial-lab {
   font-size: 11px;
   letter-spacing: 0.32em;
-  color: var(--dim);
+  color: var(--accent);
   text-transform: uppercase;
 }
 
@@ -303,6 +303,6 @@ html, body {
   width: 160px;
   outline: none;
 }
-.name-input:focus { border-color: var(--warm); }
+.name-input:focus { border-color: var(--accent); }
 
 .pill.back { border-color: rgba(255, 255, 255, 0.2); color: rgba(255, 255, 255, 0.75); }
