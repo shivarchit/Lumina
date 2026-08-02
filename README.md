@@ -51,6 +51,7 @@ On first run, **allow Local Network access** when macOS asks — the app talks t
 - **Groups** — create, delete, and tick members in a management overlay; targeting a group fans every command out
 - **Live** — 10-second heartbeat re-syncs state, so changes from the phone app, the TUI, or cron show up here
 - **Shared brain** — reads and writes the same `~/.lumina-config.json` as Lumina-TUI: devices, groups, theme, last state
+- **Easter eggs** — the dial knows certain numbers, and it's not just the dial. That's all the hint you get
 
 ## Night / Dusk
 

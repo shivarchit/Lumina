@@ -148,6 +148,10 @@ function renderStatusLine() {
   if (S.health) parts.push(`<span class="ok">${esc(S.health)}</span>`);
   const hint = Object.values(S.memberStates).find((st) => st.hint)?.hint;
   if (hint) parts.push(`<span class="err">${esc(hint)}</span>`);
+  const states = Object.values(S.memberStates);
+  if (states.length && states.every((st) => !st.err && !st.power)) {
+    parts.push('<span class="void">the void stares back 🌑</span>');
+  }
   el('statusline').innerHTML = parts.join(' &nbsp;·&nbsp; ') || '…';
 }
 
@@ -285,12 +289,18 @@ let lastEgg = 0;
 
 const EGG_HTML = {
   1: '<span class="egg-candle">🕯️</span> barely holding on',
+  11: '<span class="egg-100">🎸</span>&nbsp;these go to eleven',
+  13: '<span class="egg-candle">🕯️</span> unlucky thirteen',
+  21: '🃏 blackjack',
+  33: '<span class="egg-33">💿</span> 33⅓ RPM — drop the needle',
   42: '<span class="egg-42">the answer to everything.</span>',
   50: '<span class="egg-50">✋ perfectly balanced, as all things should be</span>',
   66: '<span class="egg-66">EXECUTE ORDER 66.</span>',
   67: '<span class="egg-hand hand-l">🫷</span><span class="egg-67-text">SIX SEVENNN</span><span class="egg-hand hand-r">🫸</span>',
   69: '<span class="egg-nice">nice.</span>',
+  77: '<span class="egg-77">🎰 jackpot</span>',
   88: '<span class="egg-88">88 MPH — GREAT SCOTT! ⚡</span>',
+  99: '99 little bugs in the code 🐛',
   100: '<span class="egg-100">🌞</span>&nbsp;MAXIMUM POWER',
 };
 
@@ -304,11 +314,18 @@ function maybeEgg(v) {
   }, 300); // fires on settle, not on drag-through
 }
 
-function showEgg(v) {
+// generic egg toast — also used by the non-dial eggs below
+function toastEgg(html, ms = 2500) {
   const t = el('egg-toast');
-  t.innerHTML = EGG_HTML[v];
+  t.innerHTML = html;
   t.hidden = false;
-  if (v === 66) {
+  clearTimeout(toastEgg._h);
+  toastEgg._h = setTimeout(() => { t.hidden = true; }, ms);
+}
+
+function showEgg(v) {
+  toastEgg(EGG_HTML[v]);
+  if (v === 66 || v === 13) {
     // the room obeys: brief blackout behind the toast
     const d = el('egg-dim');
     d.hidden = false;
@@ -317,8 +334,37 @@ function showEgg(v) {
     d.style.animation = '';
     setTimeout(() => { d.hidden = true; }, 2500);
   }
-  setTimeout(() => { t.hidden = true; }, 2500);
 }
+
+function confetti() {
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const colors = ['#E879F9', '#4F46E5', '#FFD9A0', '#A6E3A1', '#F38BA8', '#89B4FA'];
+  for (let i = 0; i < 40; i++) {
+    const p = document.createElement('span');
+    p.className = 'confetti';
+    p.style.left = `${Math.random() * 100}vw`;
+    p.style.background = colors[i % colors.length];
+    p.style.animationDelay = `${Math.random() * 0.6}s`;
+    p.style.animationDuration = `${1.6 + Math.random()}s`;
+    document.body.appendChild(p);
+    setTimeout(() => p.remove(), 3400);
+  }
+}
+
+// konami code fires the Party scene on the current target
+const KONAMI = ['ArrowUp', 'ArrowUp', 'ArrowDown', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ArrowLeft', 'ArrowRight', 'b', 'a'];
+let konamiIdx = 0;
+window.addEventListener('keydown', (e) => {
+  konamiIdx = e.key === KONAMI[konamiIdx] ? konamiIdx + 1 : (e.key === KONAMI[0] ? 1 : 0);
+  if (konamiIdx !== KONAMI.length) return;
+  konamiIdx = 0;
+  if (!S.target) return;
+  S.power = true;
+  SetPilot(S.target.targets, { sceneId: 4, state: true });
+  toastEgg('🎮 KONAMI — party mode');
+  confetti();
+  render();
+});
 
 function setBrightness(v) {
   S.brightness = v;
@@ -366,6 +412,7 @@ el('temp-range').addEventListener('input', (e) => {
   S.power = true;
   el('temp-pill').textContent = `${S.temp}K`;
   el('temp-num').textContent = S.temp;
+  if (S.temp === 6500) toastEgg('❄️ arctic mode');
   render();
   debouncedPilot({ temp: S.temp, dimming: S.brightness, state: true });
 });
@@ -475,6 +522,7 @@ function buildHexRow() {
 
 // scenes grid
 function buildScenes() {
+  buildScenes._party = buildScenes._party || 0;
   const grid = el('scene-grid');
   grid.innerHTML = '';
   for (const [name, id, c1, c2] of SCENES) {
@@ -492,6 +540,7 @@ function buildScenes() {
       });
       b.classList.add('on');
       b.style.boxShadow = `0 0 14px ${c1}66`;
+      if (name === 'Party' && ++buildScenes._party % 3 === 0) confetti();
       S.power = true;
       const res = await SetPilot(S.target.targets, { sceneId: id, state: true });
       S.health = fanoutHealth(res, `scene ${name} · ${res.ms}ms`);
@@ -512,12 +561,17 @@ function timerTick() {
   const m = Math.floor(left / 60000);
   const s = Math.floor((left % 60000) / 1000);
   el('timer-display').textContent = `${m}:${String(s).padStart(2, '0')}`;
+  if (m === 0 && s === 7 && !T.egg007) {
+    T.egg007 = true;
+    toastEgg('🍸 007 — shaken, not stirred');
+  }
 }
 setInterval(timerTick, 1000);
 
 function startTimer(mins) {
   cancelTimer();
   const targets = S.target.targets;
+  T.egg007 = false;
   T.until = Date.now() + mins * 60000;
   T.targetName = S.target.name;
   T.handle = setTimeout(async () => {
@@ -557,7 +611,14 @@ el('timer-start').onclick = () => {
 el('timer-cancel').onclick = () => { cancelTimer(); S.health = 'sleep timer cancelled'; render(); };
 
 // ── power ──────────────────────────────────────────────────────────
+let powerClicks = [];
 el('power-pill').onclick = async () => {
+  const now = Date.now();
+  powerClicks = powerClicks.filter((t) => now - t < 3000).concat(now);
+  if (powerClicks.length >= 5) {
+    powerClicks = [];
+    toastEgg('🤨 make up your mind');
+  }
   const next = !S.power;
   S.power = next;
   render();
