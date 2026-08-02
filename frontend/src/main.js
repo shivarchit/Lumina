@@ -476,4 +476,12 @@ el('themes-pill').onclick = () => {
   buildHexRow();
   buildScenes();
   render();
+
+  // 10s heartbeat keeps the window honest when the bulb changes from
+  // elsewhere (phone app, TUI, cron). Paused while the window is hidden;
+  // skipped mid-drag so a stale read can't fight the user's hand.
+  setInterval(() => {
+    if (document.hidden || dragging || wheelDragging) return;
+    syncStates();
+  }, 10_000);
 })();
