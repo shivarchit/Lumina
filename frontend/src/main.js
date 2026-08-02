@@ -1,7 +1,7 @@
 import './style.css';
 import {
   GetConfig, GetState, SetPower, SetPilot, SetLastState,
-  Discover, SaveDevice, SetTheme,
+  Discover, SaveDevice, SetTheme, SaveGroup, DeleteGroup,
 } from '../wailsjs/go/main/App';
 
 // ── state ──────────────────────────────────────────────────────────
@@ -68,6 +68,7 @@ document.querySelector('#app').innerHTML = `
     <div class="statusline" id="statusline">connecting…</div>
     <div class="approw">
       <button class="pill" id="discover-pill">Discover</button>
+      <button class="pill" id="groups-pill">Groups</button>
       <button class="pill" id="themes-pill">Themes</button>
     </div>
   </div>
@@ -580,6 +581,100 @@ el('discover-pill').onclick = async () => {
     body.appendChild(card);
   }
 };
+
+// ── groups management ──────────────────────────────────────────────
+function renderGroupsOverlay() {
+  const body = openOverlay('Groups');
+
+  // create row
+  const createRow = document.createElement('div');
+  createRow.className = 'dev-actions';
+  createRow.style.marginBottom = '14px';
+  const nameInput = document.createElement('input');
+  nameInput.className = 'name-input';
+  nameInput.placeholder = 'New group name';
+  nameInput.maxLength = 32;
+  const createBtn = document.createElement('button');
+  createBtn.className = 'pill';
+  createBtn.textContent = 'Create';
+  createBtn.onclick = async () => {
+    const name = nameInput.value.trim();
+    if (!name) { nameInput.focus(); return; }
+    if ((S.cfg.groups || []).some((g) => g.name === name)) { nameInput.select(); return; }
+    try { await SaveGroup({ name, macs: [] }); } catch (e) { S.health = String(e); render(); return; }
+    S.cfg = await GetConfig();
+    buildSwitcher();
+    renderGroupsOverlay(); // re-render with the new group open for editing
+  };
+  nameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') createBtn.onclick(); });
+  createRow.append(nameInput, createBtn);
+  body.appendChild(createRow);
+
+  if (!(S.cfg.groups || []).length) {
+    const hint = document.createElement('p');
+    hint.className = 'overlay-hint';
+    hint.textContent = 'no groups yet — create one, then tick its members';
+    body.appendChild(hint);
+    return;
+  }
+
+  for (const g of S.cfg.groups) {
+    const card = document.createElement('div');
+    card.className = 'dev-card';
+
+    const title = document.createElement('div');
+    title.className = 'dev-title';
+    title.textContent = g.name;
+    const count = document.createElement('span');
+    count.className = 'dev-badge saved';
+    count.textContent = `${(g.macs || []).length} member(s)`;
+    title.appendChild(count);
+    const del = document.createElement('button');
+    del.className = 'pill';
+    del.textContent = 'Delete';
+    del.style.marginLeft = 'auto';
+    del.onclick = async () => {
+      await DeleteGroup(g.name);
+      S.cfg = await GetConfig();
+      buildSwitcher();
+      renderGroupsOverlay();
+    };
+    title.appendChild(del);
+    card.appendChild(title);
+
+    // member checkboxes from saved devices
+    const inGroup = new Set((g.macs || []).map((m) => (m || '').toLowerCase()));
+    for (const d of S.cfg.savedDevices || []) {
+      const mac = (d.mac || '').toLowerCase();
+      const row = document.createElement('label');
+      row.className = 'member-row';
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = inGroup.has(mac);
+      cb.onchange = async () => {
+        const macs = new Set(inGroup);
+        if (cb.checked) macs.add(mac); else macs.delete(mac);
+        try { await SaveGroup({ name: g.name, macs: [...macs] }); } catch (e) { S.health = String(e); render(); return; }
+        S.cfg = await GetConfig();
+        buildSwitcher();
+        renderGroupsOverlay();
+      };
+      const label = document.createElement('span');
+      label.textContent = d.name || d.ip;
+      row.append(cb, label);
+      card.appendChild(row);
+    }
+    if (!(S.cfg.savedDevices || []).length) {
+      const hint = document.createElement('div');
+      hint.className = 'dev-meta';
+      hint.textContent = 'no saved devices — discover and save bulbs first';
+      card.appendChild(hint);
+    }
+    body.appendChild(card);
+  }
+}
+
+el('groups-pill').onclick = renderGroupsOverlay;
 
 // One toggle: dark or light. Persisted as mocha/latte so the TUI's theme
 // system understands the same config value.
