@@ -24,32 +24,35 @@ document.querySelector('#app').innerHTML = `
     <nav class="switcher" id="switcher"></nav>
     <p class="target-name" id="target-name">—</p>
     <p class="target-sub" id="target-sub"></p>
-    <div class="dial-zone" id="dial-zone">
-      <svg class="dial-svg" viewBox="0 0 230 230" aria-hidden="true">
-        <circle class="dial-track" cx="115" cy="115" r="98" pathLength="360"/>
-        <circle id="dial-arc" cx="115" cy="115" r="98" pathLength="360"/>
-      </svg>
-      <div class="dial-center">
-        <span class="dial-val"><span id="dial-num">–</span><small>%</small></span>
-        <span class="dial-lab">brightness</span>
+    <div class="center">
+      <div class="cview" id="view-dial">
+        <div class="dial-zone" id="dial-zone">
+          <svg class="dial-svg" viewBox="0 0 230 230" aria-hidden="true">
+            <circle class="dial-track" cx="115" cy="115" r="98" pathLength="360"/>
+            <circle id="dial-arc" cx="115" cy="115" r="98" pathLength="360"/>
+          </svg>
+          <div class="dial-center">
+            <span class="dial-val"><span id="dial-num">–</span><small>%</small></span>
+            <span class="dial-lab">brightness</span>
+          </div>
+        </div>
       </div>
+      <div class="cview" id="view-temp" hidden>
+        <p class="big-val"><span id="temp-num">4000</span><small>K</small></p>
+        <input type="range" id="temp-range" min="2200" max="6500" step="100" aria-label="Color temperature" />
+        <div class="panel-hint"><span>warm 2200K</span><span>6500K cool</span></div>
+      </div>
+      <div class="cview" id="view-color" hidden>
+        <div class="wheel-zone" id="wheel-zone"><svg id="wheel-svg" viewBox="0 0 190 190" aria-hidden="true"></svg><span class="wheel-dot" id="wheel-dot" hidden></span></div>
+        <div class="hexrow" id="hexrow"></div>
+      </div>
+      <div class="cview" id="view-scenes" hidden><div class="scene-grid" id="scene-grid"></div></div>
     </div>
     <div class="controls">
       <button class="pill on" id="power-pill">⏻ On</button>
       <button class="pill" id="temp-pill" data-panel="temp">4000K</button>
       <button class="pill" id="color-pill" data-panel="color">Color</button>
       <button class="pill" id="scenes-pill" data-panel="scenes">Scenes</button>
-    </div>
-    <div class="panel" id="panel" hidden>
-      <div id="panel-temp" hidden>
-        <input type="range" id="temp-range" min="2200" max="6500" step="100" aria-label="Color temperature" />
-        <div class="panel-hint"><span>warm 2200K</span><span>6500K cool</span></div>
-      </div>
-      <div id="panel-color" hidden>
-        <div class="wheel-zone" id="wheel-zone"><div class="wheel" id="wheel"></div><span class="wheel-dot" id="wheel-dot" hidden></span></div>
-        <div class="hexrow" id="hexrow"></div>
-      </div>
-      <div id="panel-scenes" hidden><div class="scene-grid" id="scene-grid"></div></div>
     </div>
     <div class="statusline" id="statusline">connecting…</div>
     <div class="approw">
@@ -260,11 +263,13 @@ const PRESET_HEXES = ['#FFD9A0', '#CBA6F7', '#89B4FA', '#A6E3A1', '#F38BA8', '#F
 
 let openPanel = null;
 
+// Per the design: panels replace the dial on the center stage,
+// they never stack on top of it.
 function togglePanel(name) {
   openPanel = openPanel === name ? null : name;
-  el('panel').hidden = openPanel === null;
+  el('view-dial').hidden = openPanel !== null;
   for (const p of ['temp', 'color', 'scenes']) {
-    el(`panel-${p}`).hidden = p !== openPanel;
+    el(`view-${p}`).hidden = p !== openPanel;
     el(`${p}-pill`).classList.toggle('on', p === openPanel);
   }
 }
@@ -279,6 +284,7 @@ el('temp-range').addEventListener('input', (e) => {
   S.colorHex = '';
   S.power = true;
   el('temp-pill').textContent = `${S.temp}K`;
+  el('temp-num').textContent = S.temp;
   render();
   debouncedPilot({ temp: S.temp, dimming: S.brightness });
 });
@@ -301,6 +307,26 @@ function applyColor(hex) {
   buildHexRow();
   const n = parseInt(hex.slice(1), 16);
   debouncedPilot({ r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255, dimming: S.brightness });
+}
+
+// SVG hue ring — WebKit renders CSS radial masks elliptically (same bug the
+// dial had), so the ring is 36 stroked arc segments instead.
+function buildWheel() {
+  const svg = el('wheel-svg');
+  const ns = 'http://www.w3.org/2000/svg';
+  for (let i = 0; i < 36; i++) {
+    const seg = document.createElementNS(ns, 'circle');
+    seg.setAttribute('cx', '95');
+    seg.setAttribute('cy', '95');
+    seg.setAttribute('r', '80');
+    seg.setAttribute('pathLength', '360');
+    seg.setAttribute('fill', 'none');
+    seg.setAttribute('stroke', `hsl(${i * 10}, 100%, 60%)`);
+    seg.setAttribute('stroke-width', '26');
+    seg.setAttribute('stroke-dasharray', '10.6 349.4');
+    seg.setAttribute('stroke-dashoffset', String(-i * 10));
+    svg.appendChild(seg);
+  }
 }
 
 const wheelZone = el('wheel-zone');
@@ -512,6 +538,7 @@ el('themes-pill').onclick = () => {
   el('temp-pill').textContent = `${S.temp}K`;
   applyThemeVars(S.cfg.theme || 'mocha');
   buildSwitcher();
+  buildWheel();
   buildHexRow();
   buildScenes();
   render();
