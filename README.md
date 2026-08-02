@@ -31,7 +31,7 @@ go install github.com/wailsapp/wails/v2/cmd/wails@latest
 
 ```bash
 wails dev      # live-reload development
-wails build    # production build → build/bin/Lumina.app
+wails build    # production build → "build/bin/Lumina Desktop.app"
 go test ./...  # backend tests
 ```
 
