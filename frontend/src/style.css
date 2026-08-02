@@ -103,6 +103,15 @@ html, body {
 }
 .dial-svg circle { fill: none; stroke-width: 26; stroke-linecap: round; }
 .dial-track { stroke: rgba(255, 255, 255, 0.07); stroke-dasharray: 280 80; }
+.dial-tick { stroke: rgba(255, 255, 255, 0.28); stroke-width: 2; }
+.dial-tick-label {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--dim);
+  pointer-events: none;
+}
 #dial-arc { transition: stroke 300ms; }
 .dial-center {
   position: absolute;
