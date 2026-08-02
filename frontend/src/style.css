@@ -94,16 +94,16 @@ html, body {
 
 /* brightness dial */
 .dial-zone { position: relative; width: 230px; height: 230px; touch-action: none; --wails-draggable: no-drag; }
-.dial {
+.dial-svg {
   position: absolute;
   inset: 0;
-  border-radius: 50%;
   cursor: grab;
-  -webkit-mask: radial-gradient(circle, transparent 84px, #000 85px);
-  mask: radial-gradient(circle, transparent 84px, #000 85px);
-  transition: opacity 300ms;
+  transform: rotate(130deg); /* dash origin 3 o'clock -> arc start at 220 deg from north */
 }
-.dial:active { cursor: grabbing; }
+.dial-svg:active { cursor: grabbing; }
+.dial-svg circle { fill: none; stroke-width: 16; stroke-linecap: round; }
+.dial-track { stroke: rgba(255, 255, 255, 0.07); stroke-dasharray: 280 80; }
+#dial-arc { transition: stroke 300ms; }
 .dial-center {
   position: absolute;
   inset: 0;
