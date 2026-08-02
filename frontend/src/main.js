@@ -783,18 +783,60 @@ function renderGroupsOverlay() {
 
 el('groups-pill').onclick = renderGroupsOverlay;
 
-// One toggle: dark or light. Persisted as mocha/latte so the TUI's theme
-// system understands the same config value.
-function applyMode(light) {
-  document.body.classList.toggle('light', light);
-  el('themes-pill').textContent = light ? '☾ Night' : '⛅ Dusk';
+// ── themes: eight moods ────────────────────────────────────────────
+// Stored under names the TUI's theme system understands where one exists
+// (night→mocha, dusk→latte, catppuccin/dracula/gruvbox as-is); indigo and
+// ember are desktop-only, the TUI falls back to its default for those.
+const THEMES = {
+  night:     { store: 'mocha',     bg: ['#0A0A0F', '#020203'], accent: '#FFD9A0', text: '#F8F8F4', label: '☾ Night' },
+  dusk:      { store: 'latte',     bg: ['#575072', '#35304A'], accent: '#FFC6A0', text: '#F5F2FA', label: '⛅ Dusk', light: true },
+  macchiato: { store: 'macchiato', bg: ['#24273A', '#181926'], accent: '#C6A0F6', text: '#CAD3F5', label: 'Macchiato' },
+  frappe:    { store: 'frappe',    bg: ['#303446', '#232634'], accent: '#CA9EE6', text: '#C6D0F5', label: 'Frappé' },
+  dracula:   { store: 'dracula',   bg: ['#282A36', '#1D1E26'], accent: '#BD93F9', text: '#F8F8F2', label: 'Dracula' },
+  gruvbox:   { store: 'gruvbox',   bg: ['#282828', '#1D2021'], accent: '#D3869B', text: '#EBDBB2', label: 'Gruvbox' },
+  indigo:    { store: 'indigo',    bg: ['#0F172A', '#020617'], accent: '#818CF8', text: '#E2E8F0', label: 'Indigo' },
+  ember:     { store: 'ember',     bg: ['#1C120C', '#0A0503'], accent: '#FF9E64', text: '#F5E9DF', label: 'Ember' },
+};
+
+function themeKeyFromStore(name) {
+  if (name === 'mocha') return 'night';
+  if (name === 'latte') return 'dusk';
+  return THEMES[name] ? name : 'night';
+}
+
+function applyThemeKey(key) {
+  const t = THEMES[key];
+  const r = document.documentElement.style;
+  r.setProperty('--accent', t.accent);
+  r.setProperty('--text', t.text);
+  document.body.style.background = `linear-gradient(180deg, ${t.bg[0]}, ${t.bg[1]})`;
+  document.body.classList.toggle('light', !!t.light);
+  el('themes-pill').textContent = t.label;
+  S.themeKey = key;
 }
 
 el('themes-pill').onclick = () => {
-  const light = !document.body.classList.contains('light');
-  applyMode(light);
-  S.cfg.theme = light ? 'latte' : 'mocha';
-  SetTheme(S.cfg.theme);
+  const body = openOverlay('Themes');
+  const grid = document.createElement('div');
+  grid.className = 'scene-grid';
+  for (const [key, t] of Object.entries(THEMES)) {
+    const b = document.createElement('button');
+    b.className = 'pill theme-pill';
+    b.textContent = t.label;
+    b.style.color = t.accent;
+    b.style.borderColor = t.accent + '55';
+    b.style.background = `linear-gradient(135deg, ${t.bg[0]}, ${t.bg[1]})`;
+    if (key === S.themeKey) b.classList.add('on');
+    b.onclick = () => {
+      applyThemeKey(key);
+      S.cfg.theme = t.store;
+      SetTheme(t.store);
+      grid.querySelectorAll('.theme-pill').forEach((p) => p.classList.remove('on'));
+      b.classList.add('on');
+    };
+    grid.appendChild(b);
+  }
+  body.appendChild(grid);
 };
 
 // ── boot ───────────────────────────────────────────────────────────
@@ -804,7 +846,7 @@ el('themes-pill').onclick = () => {
   S.temp = S.cfg.lastColorTemp > 0 ? S.cfg.lastColorTemp : 4000;
   el('temp-range').value = S.temp;
   el('temp-pill').textContent = `${S.temp}K`;
-  applyMode(S.cfg.theme === 'latte');
+  applyThemeKey(themeKeyFromStore(S.cfg.theme));
   buildSwitcher();
   buildDialTicks();
   buildWheel();
