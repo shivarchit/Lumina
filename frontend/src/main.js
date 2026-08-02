@@ -20,7 +20,6 @@ const S = {
 document.querySelector('#app').innerHTML = `
   <span class="blob" id="blob-a"></span>
   <span class="blob" id="blob-b"></span>
-  <span class="blob" id="blob-theme"></span>
   <div class="stage">
     <nav class="switcher" id="switcher"></nav>
     <p class="target-name" id="target-name">—</p>
@@ -517,50 +516,18 @@ el('discover-pill').onclick = async () => {
   }
 };
 
-// Palettes recolor accents only — the near-black canvas is the identity.
-const THEMES = {
-  mocha:     { accent: '#CBA6F7', ok: '#A6E3A1', err: '#F38BA8', warm: '#FFD9A0' },
-  macchiato: { accent: '#C6A0F6', ok: '#A6DA95', err: '#ED8796', warm: '#F5D9B0' },
-  frappe:    { accent: '#CA9EE6', ok: '#A6D189', err: '#E78284', warm: '#EEDBB2' },
-  latte:     { accent: '#8839EF', ok: '#40A02B', err: '#D20F39', warm: '#FFE0B0' },
-  dracula:   { accent: '#BD93F9', ok: '#50FA7B', err: '#FF5555', warm: '#F1FA8C' },
-  gruvbox:   { accent: '#D3869B', ok: '#B8BB26', err: '#FB4934', warm: '#FABD2F' },
-};
-
-function applyThemeVars(name) {
-  const t = THEMES[name] || THEMES.mocha;
-  const r = document.documentElement.style;
-  r.setProperty('--accent', t.accent);
-  r.setProperty('--ok', t.ok);
-  r.setProperty('--err', t.err);
-  r.setProperty('--warm', t.warm);
-  // The theme paints the room, not just outlines: accent-washed canvas,
-  // accent aura blob, accent-tinted glass. (Computed here — no color-mix.)
-  r.setProperty('--accent-soft', hexToRgba(t.accent, 0.30));
-  r.setProperty('--accent-faint', hexToRgba(t.accent, 0.10));
-  document.body.style.background =
-    `linear-gradient(180deg, ${hexToRgba(t.accent, 0.17)}, #0A0A0F 46%, #020203)`;
-  el('blob-theme').style.background =
-    `radial-gradient(closest-side, ${hexToRgba(t.accent, 0.24)}, transparent 70%)`;
+// One toggle: dark or light. Persisted as mocha/latte so the TUI's theme
+// system understands the same config value.
+function applyMode(light) {
+  document.body.classList.toggle('light', light);
+  el('themes-pill').textContent = light ? '☾ Dark' : '☀ Light';
 }
 
 el('themes-pill').onclick = () => {
-  const body = openOverlay('Themes');
-  for (const name of Object.keys(THEMES)) {
-    const b = document.createElement('button');
-    b.className = 'pill theme-pill';
-    b.textContent = name;
-    b.style.color = THEMES[name].accent;
-    if ((S.cfg.theme || 'mocha') === name) b.classList.add('on');
-    b.onclick = () => {
-      S.cfg.theme = name;
-      applyThemeVars(name);
-      SetTheme(name);
-      body.querySelectorAll('.pill').forEach((p) => p.classList.remove('on'));
-      b.classList.add('on');
-    };
-    body.appendChild(b);
-  }
+  const light = !document.body.classList.contains('light');
+  applyMode(light);
+  S.cfg.theme = light ? 'latte' : 'mocha';
+  SetTheme(S.cfg.theme);
 };
 
 // ── boot ───────────────────────────────────────────────────────────
@@ -570,7 +537,7 @@ el('themes-pill').onclick = () => {
   S.temp = S.cfg.lastColorTemp > 0 ? S.cfg.lastColorTemp : 4000;
   el('temp-range').value = S.temp;
   el('temp-pill').textContent = `${S.temp}K`;
-  applyThemeVars(S.cfg.theme || 'mocha');
+  applyMode(S.cfg.theme === 'latte');
   buildSwitcher();
   buildWheel();
   buildHexRow();
