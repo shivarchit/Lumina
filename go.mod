@@ -3,7 +3,7 @@ module Lumina
 go 1.25.0
 
 require (
-	github.com/shivarchit/Lumina-TUI v1.2.1
+	github.com/shivarchit/Lumina-TUI v1.2.2
 	github.com/wailsapp/wails/v2 v2.13.0
 )
 
