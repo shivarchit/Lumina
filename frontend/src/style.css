@@ -306,3 +306,9 @@ html, body {
 .name-input:focus { border-color: var(--accent); }
 
 .pill.back { border-color: rgba(255, 255, 255, 0.2); color: rgba(255, 255, 255, 0.75); }
+
+/* theme aura + accent-tinted glass */
+#blob-theme { width: 520px; height: 360px; top: 30%; left: -140px; }
+.statusline { border-color: var(--accent-soft, var(--faint)); }
+.overlay-card { border-color: var(--accent-soft, var(--faint)); }
+.pill.on { background: var(--accent-faint, rgba(255, 255, 255, 0.04)); }
