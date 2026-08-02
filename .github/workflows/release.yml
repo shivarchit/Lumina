@@ -75,6 +75,8 @@ jobs:
         if: startsWith(matrix.platform, 'windows')
         shell: bash
         run: |
+          # choco updates the machine PATH, but this step's shell predates it
+          export PATH="$PATH:/c/Program Files (x86)/NSIS"
           wails build -platform ${{ matrix.platform }} -clean -nsis
           mkdir -p dist
           cp "build/bin/Lumina Desktop-amd64-installer.exe" "dist/Lumina-Desktop-${{ matrix.name }}-installer.exe"
