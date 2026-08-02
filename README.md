@@ -17,13 +17,19 @@ Built on the [Lumina-TUI](https://github.com/shivarchit/Lumina-TUI) engine — o
 
 ## Install
 
-**macOS** (universal, one-liner):
+**macOS / Linux**:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/shivarchit/Lumina/master/install.sh | bash
 ```
 
-**Windows / Linux**: grab the installer, portable zip, or tarball from the [latest release](https://github.com/shivarchit/Lumina/releases/latest).
+**Windows** (PowerShell):
+
+```powershell
+irm https://raw.githubusercontent.com/shivarchit/Lumina/master/install.ps1 | iex
+```
+
+Or grab the installer, portable zip, or tarball from the [latest release](https://github.com/shivarchit/Lumina/releases/latest).
 
 On first run, **allow Local Network access** when macOS asks — the app talks to your bulbs directly over LAN UDP, no cloud. If toggles report *failed*, see [troubleshooting](docs/troubleshooting.md).
 
