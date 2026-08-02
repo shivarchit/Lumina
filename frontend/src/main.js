@@ -25,7 +25,10 @@ document.querySelector('#app').innerHTML = `
     <p class="target-name" id="target-name">—</p>
     <p class="target-sub" id="target-sub"></p>
     <div class="dial-zone" id="dial-zone">
-      <div class="dial" id="dial"></div>
+      <svg class="dial-svg" viewBox="0 0 230 230" aria-hidden="true">
+        <circle class="dial-track" cx="115" cy="115" r="98" pathLength="360"/>
+        <circle id="dial-arc" cx="115" cy="115" r="98" pathLength="360"/>
+      </svg>
       <div class="dial-center">
         <span class="dial-val"><span id="dial-num">–</span><small>%</small></span>
         <span class="dial-lab">brightness</span>
@@ -81,9 +84,9 @@ function lightColor() {
 function render() {
   const c = lightColor();
   const sweep = (S.brightness / 100) * SWEEP_MAX;
-  el('dial').style.background = c
-    ? `conic-gradient(from ${SWEEP_START}deg, ${c} 0 ${sweep}deg, rgba(255,255,255,.07) ${sweep}deg ${SWEEP_MAX}deg, transparent ${SWEEP_MAX}deg)`
-    : `conic-gradient(from ${SWEEP_START}deg, rgba(255,255,255,.07) 0 ${SWEEP_MAX}deg, transparent ${SWEEP_MAX}deg)`;
+  const arc = el('dial-arc');
+  arc.style.stroke = c || 'rgba(255,255,255,.07)';
+  arc.style.strokeDasharray = `${c ? sweep : 0} ${360 - (c ? sweep : 0)}`;
   el('dial-num').textContent = S.brightness;
   el('dial-zone').classList.toggle('offline', !S.power);
 
@@ -380,7 +383,11 @@ function openOverlay(title) {
 function closeOverlay() { el('overlay').hidden = true; }
 el('overlay-close').onclick = closeOverlay;
 el('overlay').addEventListener('click', (e) => { if (e.target === el('overlay')) closeOverlay(); });
-window.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeOverlay(); });
+window.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape') return;
+  if (!el('overlay').hidden) { closeOverlay(); return; }
+  if (openPanel) togglePanel(openPanel); // Esc collapses back to the home dial
+});
 
 el('discover-pill').onclick = async () => {
   const body = openOverlay('Discover');
