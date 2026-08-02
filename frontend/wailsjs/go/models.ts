@@ -90,6 +90,7 @@ export namespace main {
 	    ok: number;
 	    failed: string[];
 	    ms: number;
+	    hint?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new FanoutResult(source);
@@ -100,6 +101,7 @@ export namespace main {
 	        this.ok = source["ok"];
 	        this.failed = source["failed"];
 	        this.ms = source["ms"];
+	        this.hint = source["hint"];
 	    }
 	}
 	export class StateResult {
@@ -109,6 +111,7 @@ export namespace main {
 	    temp: number;
 	    ms: number;
 	    err: string;
+	    hint?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new StateResult(source);
@@ -122,6 +125,7 @@ export namespace main {
 	        this.temp = source["temp"];
 	        this.ms = source["ms"];
 	        this.err = source["err"];
+	        this.hint = source["hint"];
 	    }
 	}
 	export class Target {

@@ -146,7 +146,17 @@ function renderStatusLine() {
       : `${esc(name)} <b style="color:${safeColor(st.colorHex)}">${st.power ? esc(st.brightness) + '%' : 'off'}</b>`
   );
   if (S.health) parts.push(`<span class="ok">${esc(S.health)}</span>`);
+  const hint = Object.values(S.memberStates).find((st) => st.hint)?.hint;
+  if (hint) parts.push(`<span class="err">${esc(hint)}</span>`);
   el('statusline').innerHTML = parts.join(' &nbsp;·&nbsp; ') || '…';
+}
+
+// One line for a fan-out result: ok count, failures, and the backend's
+// actionable hint (e.g. macOS Local Network permission) when present.
+function fanoutHealth(res, okMsg) {
+  if (!res.failed.length) return okMsg;
+  const base = `${res.ok} ok · failed: ${res.failed.join(', ')}`;
+  return res.hint ? `${base} — ${res.hint}` : base;
 }
 
 function hexToRgba(color, a) {
@@ -225,9 +235,7 @@ function debouncedPilot(params) {
   clearTimeout(sendTimer);
   sendTimer = setTimeout(async () => {
     const res = await SetPilot(S.target.targets, params);
-    S.health = res.failed.length
-      ? `${res.ok} ok · failed: ${res.failed.join(', ')}`
-      : `${res.ok}/${res.ok} ok · ${res.ms}ms`;
+    S.health = fanoutHealth(res, `${res.ok}/${res.ok} ok · ${res.ms}ms`);
     SetLastState(S.colorHex, S.brightness, S.temp);
     render();
   }, 140);
@@ -454,9 +462,7 @@ function buildScenes() {
       b.style.boxShadow = `0 0 14px ${c1}66`;
       S.power = true;
       const res = await SetPilot(S.target.targets, { sceneId: id, state: true });
-      S.health = res.failed.length
-        ? `${res.ok} ok · failed: ${res.failed.join(', ')}`
-        : `scene ${name} · ${res.ms}ms`;
+      S.health = fanoutHealth(res, `scene ${name} · ${res.ms}ms`);
       render();
     };
     grid.appendChild(b);
@@ -524,9 +530,7 @@ el('power-pill').onclick = async () => {
   S.power = next;
   render();
   const res = await SetPower(S.target.targets, next);
-  S.health = res.failed.length
-    ? `${res.ok} ok · failed: ${res.failed.join(', ')}`
-    : `power ${next ? 'on' : 'off'} · ${res.ms}ms`;
+  S.health = fanoutHealth(res, `power ${next ? 'on' : 'off'} · ${res.ms}ms`);
   render();
 };
 
