@@ -102,7 +102,7 @@ function render() {
   const arc = el('dial-arc');
   arc.style.stroke = c || 'rgba(255,255,255,.07)';
   arc.style.strokeDasharray = `${c ? sweep : 0} ${360 - (c ? sweep : 0)}`;
-  el('dial-num').textContent = S.brightness;
+  el('dial-num').textContent = S.power ? S.brightness : 0; // off reads 0%
   el('dial-zone').classList.toggle('offline', !S.power);
 
   const alpha = S.power ? 0.14 + (S.brightness / 100) * 0.2 : 0;
