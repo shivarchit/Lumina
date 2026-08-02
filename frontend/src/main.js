@@ -1,6 +1,7 @@
 import './style.css';
 import {
   GetConfig, GetState, SetPower, SetPilot, SetLastState,
+  Discover, SaveDevice, SetTheme,
 } from '../wailsjs/go/main/App';
 
 // ── state ──────────────────────────────────────────────────────────
@@ -48,6 +49,16 @@ document.querySelector('#app').innerHTML = `
       <div id="panel-scenes" hidden><div class="scene-grid" id="scene-grid"></div></div>
     </div>
     <div class="statusline" id="statusline">connecting…</div>
+    <div class="approw">
+      <button class="pill" id="discover-pill">Discover</button>
+      <button class="pill" id="themes-pill">Themes</button>
+    </div>
+  </div>
+  <div class="overlay" id="overlay" hidden>
+    <div class="overlay-card">
+      <div class="overlay-head"><span id="overlay-title"></span><button class="pill" id="overlay-close">Esc</button></div>
+      <div id="overlay-body"></div>
+    </div>
   </div>
 `;
 
@@ -359,6 +370,100 @@ el('power-pill').onclick = async () => {
   render();
 };
 
+// ── overlays: discover + themes ────────────────────────────────────
+function openOverlay(title) {
+  el('overlay-title').textContent = title;
+  el('overlay-body').innerHTML = '';
+  el('overlay').hidden = false;
+  return el('overlay-body');
+}
+function closeOverlay() { el('overlay').hidden = true; }
+el('overlay-close').onclick = closeOverlay;
+el('overlay').addEventListener('click', (e) => { if (e.target === el('overlay')) closeOverlay(); });
+window.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeOverlay(); });
+
+el('discover-pill').onclick = async () => {
+  const body = openOverlay('Discover');
+  body.innerHTML = '<p class="overlay-hint">scanning 255.255.255.255:38899 …</p>';
+  const devices = await Discover();
+  body.innerHTML = '';
+  if (!devices.length) {
+    body.innerHTML = '<p class="overlay-hint">no bulbs found — same network as the bulbs?</p>';
+    return;
+  }
+  const savedMacs = new Set((S.cfg.savedDevices || []).map((d) => (d.mac || '').toLowerCase()));
+  for (const d of devices) {
+    const card = document.createElement('div');
+    card.className = 'dev-card';
+    const known = savedMacs.has((d.mac || '').toLowerCase());
+    const title = document.createElement('div');
+    title.className = 'dev-title';
+    title.textContent = d.name || d.ip;
+    const badge = document.createElement('span');
+    badge.className = 'dev-badge' + (known ? ' saved' : '');
+    badge.textContent = known ? 'SAVED' : 'NEW';
+    title.appendChild(badge);
+    const meta = document.createElement('div');
+    meta.className = 'dev-meta';
+    meta.textContent = `${d.ip} · ${d.mac || 'no mac'}`;
+    const actions = document.createElement('div');
+    actions.className = 'dev-actions';
+    const save = document.createElement('button');
+    save.className = 'pill';
+    save.textContent = known ? 'Rename…' : 'Save…';
+    save.onclick = async () => {
+      const name = prompt('Device name', d.name || '');
+      if (!name) return;
+      const err = await SaveDevice({ name, ip: d.ip, port: S.cfg.port, mac: d.mac });
+      if (err) { alert(err); return; }
+      S.cfg = await GetConfig();
+      buildSwitcher();
+      closeOverlay();
+    };
+    actions.appendChild(save);
+    card.append(title, meta, actions);
+    body.appendChild(card);
+  }
+};
+
+// Palettes recolor accents only — the near-black canvas is the identity.
+const THEMES = {
+  mocha:     { accent: '#CBA6F7', ok: '#A6E3A1', err: '#F38BA8', warm: '#FFD9A0' },
+  macchiato: { accent: '#C6A0F6', ok: '#A6DA95', err: '#ED8796', warm: '#F5D9B0' },
+  frappe:    { accent: '#CA9EE6', ok: '#A6D189', err: '#E78284', warm: '#EEDBB2' },
+  latte:     { accent: '#8839EF', ok: '#40A02B', err: '#D20F39', warm: '#FFE0B0' },
+  dracula:   { accent: '#BD93F9', ok: '#50FA7B', err: '#FF5555', warm: '#F1FA8C' },
+  gruvbox:   { accent: '#D3869B', ok: '#B8BB26', err: '#FB4934', warm: '#FABD2F' },
+};
+
+function applyThemeVars(name) {
+  const t = THEMES[name] || THEMES.mocha;
+  const r = document.documentElement.style;
+  r.setProperty('--accent', t.accent);
+  r.setProperty('--ok', t.ok);
+  r.setProperty('--err', t.err);
+  r.setProperty('--warm', t.warm);
+}
+
+el('themes-pill').onclick = () => {
+  const body = openOverlay('Themes');
+  for (const name of Object.keys(THEMES)) {
+    const b = document.createElement('button');
+    b.className = 'pill theme-pill';
+    b.textContent = name;
+    b.style.color = THEMES[name].accent;
+    if ((S.cfg.theme || 'mocha') === name) b.classList.add('on');
+    b.onclick = () => {
+      S.cfg.theme = name;
+      applyThemeVars(name);
+      SetTheme(name);
+      body.querySelectorAll('.pill').forEach((p) => p.classList.remove('on'));
+      b.classList.add('on');
+    };
+    body.appendChild(b);
+  }
+};
+
 // ── boot ───────────────────────────────────────────────────────────
 (async () => {
   S.cfg = await GetConfig();
@@ -366,6 +471,7 @@ el('power-pill').onclick = async () => {
   S.temp = S.cfg.lastColorTemp > 0 ? S.cfg.lastColorTemp : 4000;
   el('temp-range').value = S.temp;
   el('temp-pill').textContent = `${S.temp}K`;
+  applyThemeVars(S.cfg.theme || 'mocha');
   buildSwitcher();
   buildHexRow();
   buildScenes();
