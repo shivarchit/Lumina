@@ -220,7 +220,8 @@ html, body {
 .statusline .ok { color: var(--ok); }
 .statusline .err { color: var(--err); }
 
-.offline { opacity: 0.35; }
+.offline .dial-svg { opacity: 0.4; }
+.offline .dial-lab { opacity: 0.55; }
 
 /* bottom app actions */
 .approw { margin-top: auto; display: flex; gap: 10px; padding-top: 18px; --wails-draggable: no-drag; }
@@ -309,7 +310,7 @@ html, body {
 
 /* light mode — one toggle, not a theme system */
 body.light {
-  background: linear-gradient(180deg, #F2EFF7, #E4E1EC);
+  background: linear-gradient(180deg, #E9E6F0, #D6D2DF);
   --text: #1E1E2E;
   --dim: rgba(0, 0, 0, 0.4);
   --faint: rgba(0, 0, 0, 0.1);
@@ -322,7 +323,7 @@ body.light {
 body.light .pill { color: rgba(0, 0, 0, 0.55); background: rgba(0, 0, 0, 0.02); }
 body.light .pill.on { color: var(--accent); }
 body.light .target-name { color: rgba(0, 0, 0, 0.8); }
-body.light .dial-track { stroke: rgba(0, 0, 0, 0.09); }
+body.light .dial-track { stroke: rgba(0, 0, 0, 0.16); }
 body.light .statusline { color: rgba(0, 0, 0, 0.55); }
 body.light .overlay { background: rgba(240, 238, 246, 0.6); }
 body.light .overlay-card { background: rgba(252, 251, 254, 0.95); }
