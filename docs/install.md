@@ -25,6 +25,14 @@ directly over LAN UDP — no cloud. If you denied the prompt (or toggles show *f
 
 ## Windows
 
+One-liner (PowerShell — downloads the NSIS installer, runs it silently):
+
+```powershell
+irm https://raw.githubusercontent.com/shivarchit/Lumina/master/install.ps1 | iex
+```
+
+Or manually:
+
 - `Lumina-Desktop-windows-amd64-installer.exe` — NSIS installer (Start menu + desktop shortcut)
 - `Lumina-Desktop-windows-amd64.zip` — portable `Lumina Desktop.exe`, no install
 
@@ -33,7 +41,13 @@ Requires the WebView2 runtime; the installer fetches it automatically if missing
 
 ## Linux
 
-Download the tarball for your architecture and put the binary on your PATH:
+Same one-liner as macOS (detects Linux, installs the tarball to `/usr/local/bin`):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/shivarchit/Lumina/master/install.sh | bash
+```
+
+Or manually:
 
 ```bash
 tar -xzf Lumina-Desktop-linux-amd64.tar.gz   # or linux-arm64
