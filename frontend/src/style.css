@@ -103,16 +103,35 @@ html, body {
 }
 .dial-svg circle { fill: none; stroke-width: 26; stroke-linecap: round; }
 .dial-track { stroke: rgba(255, 255, 255, 0.07); stroke-dasharray: 280 80; }
-.dial-tick { stroke: rgba(255, 255, 255, 0.28); stroke-width: 2; }
-.dial-tick-label {
-  position: absolute;
-  transform: translate(-50%, -50%);
-  font-family: var(--mono);
-  font-size: 9px;
-  color: var(--dim);
+/* 25/50/75 dots: light twin shows on the unfilled track, dark twin reads
+   as a dimple where the filled arc covers it */
+.dial-svg .dial-dot-under { fill: rgba(255, 255, 255, 0.35); stroke-width: 0; }
+.dial-svg .dial-dot-over { fill: rgba(0, 0, 0, 0.28); stroke-width: 0; }
+.dial-svg #dial-knob {
+  fill: #fff;
+  stroke-width: 0;
+  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.5));
   pointer-events: none;
 }
 #dial-arc { transition: stroke 300ms; }
+/* supernova: hold 100% for 3s */
+.dial-zone.supernova { filter: drop-shadow(0 0 30px rgba(255, 220, 150, 0.25)); }
+.dial-zone.supernova::after {
+  content: '';
+  position: absolute;
+  inset: -28px;
+  pointer-events: none;
+  border-radius: 50%;
+  background: repeating-conic-gradient(from 0deg, rgba(255, 220, 150, 0.14) 0deg 2deg, transparent 2deg 24deg);
+  -webkit-mask: radial-gradient(circle, transparent 54%, black 60%, transparent 78%);
+  mask: radial-gradient(circle, transparent 54%, black 60%, transparent 78%);
+  animation: nova 2.6s ease-out forwards;
+}
+@keyframes nova {
+  0% { opacity: 0; transform: rotate(0deg) scale(0.9); }
+  18% { opacity: 1; }
+  100% { opacity: 0; transform: rotate(24deg) scale(1.06); }
+}
 .dial-center {
   position: absolute;
   inset: 0;
@@ -179,14 +198,45 @@ html, body {
   border: 3px solid #0A0A0F;
   box-shadow: 0 0 0 1px var(--faint);
 }
-.panel-hint {
-  display: flex;
-  justify-content: space-between;
+/* preset marks under the temp slider: dot + tiny label at 2700/4000/6500K */
+.temp-marks {
+  position: relative;
   width: 300px;
+  height: 18px;
+  margin-top: 6px;
+}
+.temp-marks span {
+  position: absolute;
+  top: 7px;
+  transform: translateX(-50%);
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: 9px;
+  letter-spacing: 0.08em;
   color: var(--dim);
-  margin-top: 8px;
+}
+.temp-marks span::before {
+  content: '';
+  position: absolute;
+  top: -6px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.35);
+}
+/* embers drift up from the warm end at 2200K */
+#view-temp { position: relative; }
+.ember {
+  position: absolute;
+  bottom: 46%;
+  border-radius: 50%;
+  pointer-events: none;
+  filter: blur(0.4px);
+  animation: ember-rise 2.4s ease-out forwards;
+}
+@keyframes ember-rise {
+  to { transform: translateY(-64px) translateX(8px); opacity: 0; }
 }
 
 .wheel-zone { position: relative; width: 190px; height: 190px; margin: 0 auto 16px; touch-action: none; }
@@ -229,6 +279,37 @@ html, body {
 .statusline .ok { color: var(--ok); }
 .statusline .err { color: var(--err); }
 .statusline .void { font-style: italic; }
+/* per-device chips: state dot · name · brightness */
+.statusline .chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 10px;
+  border: 1px solid var(--faint);
+  border-radius: 99px;
+  margin: 0 3px;
+}
+.statusline .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.statusline .err-dot { background: var(--err); }
+/* midnight stars */
+.star {
+  position: fixed;
+  border-radius: 50%;
+  background: #fff;
+  pointer-events: none;
+  z-index: 0;
+  animation: twinkle 4s ease-in-out infinite;
+}
+@keyframes twinkle {
+  50% { opacity: 0.1; }
+}
+/* two-tap delete confirm */
+.pill.confirm { border-color: rgba(255, 122, 110, 0.6); color: #ff9a8f; }
 
 .offline .dial-svg { opacity: 0.4; }
 .offline .dial-lab { opacity: 0.55; }
@@ -415,6 +496,7 @@ body.light .overlay { background: rgba(40, 37, 50, 0.6); }
 @keyframes confetti-fall { to { transform: translateY(110vh) rotate(540deg); opacity: 0.7; } }
 
 @media (prefers-reduced-motion: reduce) {
-  .egg-66, .egg-candle, .egg-42, .egg-50, .egg-88, .egg-100, .egg-dim, .egg-33, .egg-77 { animation: none; }
-  .confetti { display: none; }
+  .egg-66, .egg-candle, .egg-42, .egg-50, .egg-88, .egg-100, .egg-dim, .egg-33, .egg-77, .star { animation: none; }
+  .confetti, .ember, .dial-zone.supernova::after { display: none; }
+  .dial-zone.supernova { filter: none; }
 }

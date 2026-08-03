@@ -40,7 +40,7 @@ document.querySelector('#app').innerHTML = `
       <div class="cview" id="view-temp" hidden>
         <p class="big-val"><span id="temp-num">4000</span><small>K</small></p>
         <input type="range" id="temp-range" min="2200" max="6500" step="100" aria-label="Color temperature" />
-        <div class="panel-hint"><span>warm 2200K</span><span>6500K cool</span></div>
+        <div class="temp-marks" aria-hidden="true"><span style="left:11.6%">warm</span><span style="left:41.9%">day</span><span style="left:100%">cool</span></div>
       </div>
       <div class="cview" id="view-color" hidden>
         <div class="wheel-zone" id="wheel-zone"><svg id="wheel-svg" viewBox="0 0 190 190" aria-hidden="true"></svg><span class="wheel-dot" id="wheel-dot" hidden></span></div>
@@ -102,8 +102,15 @@ function render() {
   const c = lightColor();
   const sweep = (S.brightness / 100) * SWEEP_MAX;
   const arc = el('dial-arc');
-  arc.style.stroke = c || 'rgba(255,255,255,.07)';
+  arc.style.stroke = S.dawnEgg && c && !S.colorHex ? 'url(#dawn)' : (c || 'rgba(255,255,255,.07)');
   arc.style.strokeDasharray = `${c ? sweep : 0} ${360 - (c ? sweep : 0)}`;
+  const knob = el('dial-knob');
+  if (knob) {
+    const a = (sweep * Math.PI) / 180;
+    knob.setAttribute('cx', String(115 + 98 * Math.cos(a)));
+    knob.setAttribute('cy', String(115 + 98 * Math.sin(a)));
+    knob.style.display = c ? '' : 'none';
+  }
   el('dial-num').textContent = S.power ? S.brightness : 0; // off reads 0%
   el('dial-zone').classList.toggle('offline', !S.power);
 
@@ -142,8 +149,8 @@ function safeColor(c) {
 function renderStatusLine() {
   const parts = Object.entries(S.memberStates).map(([name, st]) =>
     st.err
-      ? `${esc(name)} <b class="err">offline</b>`
-      : `${esc(name)} <b style="color:${safeColor(st.colorHex)}">${st.power ? esc(st.brightness) + '%' : 'off'}</b>`
+      ? `<span class="chip"><i class="dot err-dot"></i>${esc(name)} · offline</span>`
+      : `<span class="chip"><i class="dot" style="background:${st.power ? safeColor(st.colorHex) : 'rgba(255,255,255,.25)'}"></i>${esc(name)} · ${st.power ? esc(st.brightness) + '%' : 'off'}</span>`
   );
   if (S.health) parts.push(`<span class="ok">${esc(S.health)}</span>`);
   const hint = Object.values(S.memberStates).find((st) => st.hint)?.hint;
@@ -152,7 +159,7 @@ function renderStatusLine() {
   if (states.length && states.every((st) => !st.err && !st.power)) {
     parts.push('<span class="void">the void stares back 🌑</span>');
   }
-  el('statusline').innerHTML = parts.join(' &nbsp;·&nbsp; ') || '…';
+  el('statusline').innerHTML = parts.join(' ') || '…';
 }
 
 // One line for a fan-out result: ok count, failures, and the backend's
@@ -283,6 +290,26 @@ zone.addEventListener('pointermove', (e) => {
 });
 zone.addEventListener('pointerup', () => { dragging = false; });
 
+// mouse wheel over the dial nudges brightness like a real knob
+zone.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  setBrightness(Math.max(1, Math.min(100, S.brightness - Math.sign(e.deltaY) * 2)));
+}, { passive: false });
+
+// keyboard: arrows nudge brightness (shift = 10), space toggles power.
+// Ignored while typing or while an overlay is up.
+window.addEventListener('keydown', (e) => {
+  if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName) || !el('overlay').hidden) return;
+  const step = e.shiftKey ? 10 : 1;
+  if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+    e.preventDefault();
+    setBrightness(Math.max(1, Math.min(100, S.brightness + (e.key === 'ArrowRight' ? step : -step))));
+  } else if (e.key === ' ') {
+    e.preventDefault();
+    el('power-pill').click();
+  }
+});
+
 // ── easter eggs: the dial knows ────────────────────────────────────
 let eggTimer = null;
 let lastEgg = 0;
@@ -369,9 +396,23 @@ window.addEventListener('keydown', (e) => {
 function setBrightness(v) {
   S.brightness = v;
   maybeEgg(v);
+  maybeSupernova(v);
   S.power = true;
   render();
   debouncedPilot({ dimming: v, state: true });
+}
+
+// hold the dial at 100 for 3s: one-shot ray burst around the ring
+let novaTimer = null;
+function maybeSupernova(v) {
+  clearTimeout(novaTimer);
+  if (v !== 100) return;
+  novaTimer = setTimeout(() => {
+    if (S.brightness !== 100 || !S.power) return;
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    zone.classList.add('supernova');
+    setTimeout(() => zone.classList.remove('supernova'), 2600);
+  }, 3000);
 }
 
 // ── expandable panels: temp / color / scenes ───────────────────────
@@ -413,9 +454,30 @@ el('temp-range').addEventListener('input', (e) => {
   el('temp-pill').textContent = `${S.temp}K`;
   el('temp-num').textContent = S.temp;
   if (S.temp === 6500) toastEgg('❄️ arctic mode');
+  if (S.temp === 2200) fireplaceEmbers();
   render();
   debouncedPilot({ temp: S.temp, dimming: S.brightness, state: true });
 });
+
+// 2200K floor: embers drift up from the warm end of the slider
+function fireplaceEmbers() {
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  if (!fireplaceEmbers._toasted) {
+    fireplaceEmbers._toasted = true;
+    toastEgg('🔥 fireplace mode');
+  }
+  const view = el('view-temp');
+  for (let i = 0; i < 14; i++) {
+    const e = document.createElement('i');
+    e.className = 'ember';
+    e.style.left = `${Math.random() * 16}%`;
+    e.style.width = e.style.height = `${1.5 + Math.random() * 3}px`;
+    e.style.background = `rgba(255,${140 + (Math.random() * 60 | 0)},60,${0.4 + Math.random() * 0.4})`;
+    e.style.animationDelay = `${Math.random() * 0.8}s`;
+    view.appendChild(e);
+    setTimeout(() => e.remove(), 3200);
+  }
+}
 
 // color wheel: angle -> hue at fixed s/l, plus preset hex pills
 function hslToHex(h, s, l) {
@@ -437,30 +499,31 @@ function applyColor(hex) {
   debouncedPilot({ r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255, dimming: S.brightness, state: true });
 }
 
-// Tick marks at 25/50/75 on the dial track, with labels floated outside the
-// arc. Ticks live inside the rotated SVG (angles measured from the dash
-// origin); labels are HTML spans on the unrotated zone so text stays upright.
+// 25/50/75 markers: dots punched into the track centerline. A light dot
+// under the arc shows on the unfilled track; a dark twin on top reads as a
+// dimple where the arc covers it. No numbers — the center readout has the
+// exact value. A knob at the arc tip (positioned by render) says "drag me".
 function buildDialTicks() {
   const svg = document.querySelector('.dial-svg');
   const ns = 'http://www.w3.org/2000/svg';
   const arc = el('dial-arc');
   for (const f of [0.25, 0.5, 0.75]) {
     const a = (f * SWEEP_MAX * Math.PI) / 180; // svg-local, clockwise from east
-    const line = document.createElementNS(ns, 'line');
-    line.setAttribute('x1', String(115 + 86 * Math.cos(a)));
-    line.setAttribute('y1', String(115 + 86 * Math.sin(a)));
-    line.setAttribute('x2', String(115 + 110 * Math.cos(a)));
-    line.setAttribute('y2', String(115 + 110 * Math.sin(a)));
-    line.setAttribute('class', 'dial-tick');
-    svg.insertBefore(line, arc); // under the filled arc, over the track
-    const label = document.createElement('span');
-    label.className = 'dial-tick-label';
-    label.textContent = String(f * 100);
-    const t = ((SWEEP_START + f * SWEEP_MAX) * Math.PI) / 180; // screen, clockwise from north
-    label.style.left = `${115 + 122 * Math.sin(t)}px`;
-    label.style.top = `${115 - 122 * Math.cos(t)}px`;
-    zone.appendChild(label);
+    const x = String(115 + 98 * Math.cos(a));
+    const y = String(115 + 98 * Math.sin(a));
+    for (const [cls, before] of [['dial-dot-under', true], ['dial-dot-over', false]]) {
+      const c = document.createElementNS(ns, 'circle');
+      c.setAttribute('cx', x);
+      c.setAttribute('cy', y);
+      c.setAttribute('r', '2.4');
+      c.setAttribute('class', cls);
+      if (before) svg.insertBefore(c, arc); else svg.appendChild(c);
+    }
   }
+  const knob = document.createElementNS(ns, 'circle');
+  knob.setAttribute('id', 'dial-knob');
+  knob.setAttribute('r', '5.5');
+  svg.appendChild(knob);
 }
 
 // SVG hue ring — WebKit renders CSS radial masks elliptically (same bug the
@@ -533,6 +596,12 @@ function buildScenes() {
     b.style.background = `linear-gradient(135deg, ${c1}59, ${c2}E6)`;
     b.style.borderColor = `${c1}59`;
     b.style.color = c1;
+    // ponytail: highlight tracks the last scene WE set — device can't report
+    // its active scene (wiz lib state has no sceneId; upstream change to lift)
+    if (S.sceneId === id) {
+      b.classList.add('on');
+      b.style.boxShadow = `0 0 14px ${c1}66`;
+    }
     b.onclick = async () => {
       grid.querySelectorAll('.scene-pill').forEach((p) => {
         p.classList.remove('on');
@@ -540,6 +609,7 @@ function buildScenes() {
       });
       b.classList.add('on');
       b.style.boxShadow = `0 0 14px ${c1}66`;
+      S.sceneId = id;
       if (name === 'Party' && ++buildScenes._party % 3 === 0) confetti();
       S.power = true;
       const res = await SetPilot(S.target.targets, { sceneId: id, state: true });
@@ -560,7 +630,10 @@ function timerTick() {
   const left = Math.max(0, T.until - Date.now());
   const m = Math.floor(left / 60000);
   const s = Math.floor((left % 60000) / 1000);
-  el('timer-display').textContent = `${m}:${String(s).padStart(2, '0')}`;
+  const end = new Date(T.until);
+  const hh = String(end.getHours()).padStart(2, '0');
+  const mm = String(end.getMinutes()).padStart(2, '0');
+  el('timer-display').textContent = `${m}:${String(s).padStart(2, '0')} → ${hh}:${mm}`;
   if (m === 0 && s === 7 && !T.egg007) {
     T.egg007 = true;
     toastEgg('🍸 007 — shaken, not stirred');
@@ -801,7 +874,14 @@ function renderGroupsOverlay() {
     del.className = 'pill';
     del.textContent = 'Delete';
     del.style.marginLeft = 'auto';
+    // two-tap: first tap arms for 3s, second tap actually deletes
     del.onclick = async () => {
+      if (!del.classList.contains('confirm')) {
+        del.classList.add('confirm');
+        del.textContent = 'sure? tap again';
+        setTimeout(() => { del.classList.remove('confirm'); del.textContent = 'Delete'; }, 3000);
+        return;
+      }
       await DeleteGroup(g.name);
       S.cfg = await GetConfig();
       buildSwitcher();
@@ -900,6 +980,45 @@ el('themes-pill').onclick = () => {
   body.appendChild(grid);
 };
 
+// ── time-of-day eggs: the app knows what hour it is ────────────────
+// midnight (00:xx): stars in the background. dawn (05-06:xx): the arc
+// takes a sunrise gradient until the next launch.
+function timeEggs() {
+  const h = new Date().getHours();
+  if (h === 0) {
+    const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    for (let i = 0; i < 40; i++) {
+      const s = document.createElement('i');
+      s.className = 'star';
+      s.style.left = `${Math.random() * 100}%`;
+      s.style.top = `${Math.random() * 60}%`;
+      s.style.width = s.style.height = `${1 + Math.random() * 2}px`;
+      s.style.opacity = `${0.25 + Math.random() * 0.5}`;
+      if (!still) s.style.animationDelay = `${Math.random() * 4}s`;
+      document.body.appendChild(s);
+    }
+    toastEgg('🌌 past midnight — the stars are out', 3500);
+  } else if (h >= 5 && h < 7) {
+    const svg = document.querySelector('.dial-svg');
+    const ns = 'http://www.w3.org/2000/svg';
+    const defs = document.createElementNS(ns, 'defs');
+    const grad = document.createElementNS(ns, 'linearGradient');
+    grad.setAttribute('id', 'dawn');
+    grad.setAttribute('x1', '0'); grad.setAttribute('y1', '0');
+    grad.setAttribute('x2', '1'); grad.setAttribute('y2', '1');
+    for (const [off, col] of [['0', '#ffb88a'], ['0.55', '#f6c8d8'], ['1', '#bcc8f5']]) {
+      const stop = document.createElementNS(ns, 'stop');
+      stop.setAttribute('offset', off);
+      stop.setAttribute('stop-color', col);
+      grad.appendChild(stop);
+    }
+    defs.appendChild(grad);
+    svg.prepend(defs);
+    S.dawnEgg = true;
+    toastEgg('🌅 early bird — dawn palette until sunrise', 3500);
+  }
+}
+
 // ── boot ───────────────────────────────────────────────────────────
 (async () => {
   S.cfg = await GetConfig();
@@ -910,6 +1029,7 @@ el('themes-pill').onclick = () => {
   applyThemeKey(themeKeyFromStore(S.cfg.theme));
   buildSwitcher();
   buildDialTicks();
+  timeEggs();
   buildWheel();
   buildHexRow();
   buildScenes();
