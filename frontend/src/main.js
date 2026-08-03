@@ -131,6 +131,13 @@ function render() {
       n > 1 ? `${n} lights · ${mode}` : `${mode}`;
   }
 
+  // external changes (phone app, TUI) must reach every control — the temp
+  // pill and slider are only otherwise written by their own input handler
+  el('temp-pill').textContent = `${S.temp}K`;
+  const tr = el('temp-range');
+  if (document.activeElement !== tr) tr.value = S.temp;
+  el('temp-num').textContent = S.temp;
+
   renderStatusLine();
 }
 
@@ -1042,4 +1049,8 @@ function timeEggs() {
     if (document.hidden || dragging || wheelDragging) return;
     syncStates();
   }, 10_000);
+  // window coming back to front syncs immediately instead of waiting a tick
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) syncStates();
+  });
 })();
