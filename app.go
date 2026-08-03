@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"fmt"
+	"os/exec"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -40,6 +42,48 @@ func hintFor(err error) string {
 		return "macOS is blocking Local Network access — System Settings → Privacy & Security → Local Network → enable Lumina Desktop, then relaunch"
 	}
 	return ""
+}
+
+// lnPrompt debounces re-raising the Local Network permission flow.
+type lnPrompt struct {
+	mu        sync.Mutex
+	lastPrime time.Time
+	lastPane  time.Time
+}
+
+// due reports which recovery actions may fire at now: prime every 10s,
+// settings pane every 60s.
+func (p *lnPrompt) due(now time.Time) (prime, pane bool) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if now.Sub(p.lastPrime) > 10*time.Second {
+		p.lastPrime = now
+		prime = true
+	}
+	if now.Sub(p.lastPane) > 60*time.Second {
+		p.lastPane = now
+		pane = true
+	}
+	return
+}
+
+var localNet lnPrompt
+
+// forceLocalNetworkPrompt re-raises the macOS Local Network permission flow
+// after a blocked send: broadcast traffic re-triggers the system prompt (when
+// macOS is still willing to show it), and the privacy pane opens so the user
+// can flip the toggle by hand. Debounced so a toggle spree doesn't spam.
+func forceLocalNetworkPrompt() {
+	prime, pane := localNet.due(time.Now())
+	if prime {
+		go func() { _, _ = wiz.DiscoverDevices() }()
+	}
+	if pane && runtime.GOOS == "darwin" {
+		go func() {
+			_ = exec.Command("open",
+				"x-apple.systempreferences:com.apple.preference.security?Privacy_LocalNetwork").Run()
+		}()
+	}
 }
 
 // StateResult is a device's live state, or the error fetching it.
@@ -153,6 +197,9 @@ func fanout(targets []Target, method string, params map[string]interface{}) Fano
 		}
 	}
 	sort.Strings(res.Failed)
+	if res.Hint != "" {
+		forceLocalNetworkPrompt()
+	}
 	res.Ms = time.Since(start).Milliseconds()
 	return res
 }
