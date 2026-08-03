@@ -5,6 +5,7 @@ import (
 	"net"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/shivarchit/Lumina-TUI/pkg/config"
 )
@@ -79,6 +80,23 @@ func TestHintForLocalNetworkDenial(t *testing.T) {
 	}
 	if hintFor(nil) != "" {
 		t.Fatal("nil error must yield no hint")
+	}
+}
+
+func TestLnPromptDebounce(t *testing.T) {
+	var p lnPrompt
+	t0 := time.Now()
+	if prime, pane := p.due(t0); !prime || !pane {
+		t.Fatal("first failure must fire both prime and pane")
+	}
+	if prime, pane := p.due(t0.Add(5 * time.Second)); prime || pane {
+		t.Fatal("5s later: both debounced")
+	}
+	if prime, pane := p.due(t0.Add(16 * time.Second)); !prime || pane {
+		t.Fatal("16s later: prime refires, pane still debounced")
+	}
+	if prime, pane := p.due(t0.Add(80 * time.Second)); !prime || !pane {
+		t.Fatal("80s later: both refire")
 	}
 }
 
