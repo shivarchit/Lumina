@@ -37,29 +37,65 @@ On first run, **allow Local Network access** when macOS asks — the app talks t
 
 | Guide | What's inside |
 |-------|---------------|
+| [Usage](docs/usage.md) | Every control in detail — dial, keyboard, scenes, timer, groups, idle mode |
+| [Themes](docs/themes.md) | The eight moods and how they sync with the TUI |
 | [Install](docs/install.md) | Per-OS install, checksum verification, config location |
 | [Build from source](docs/build.md) | Prerequisites per OS, dev loop, release automation |
-| [Troubleshooting](docs/troubleshooting.md) | Failed toggles, offline devices, discovery issues |
+| [Troubleshooting](docs/troubleshooting.md) | Failed toggles, offline devices, discovery, macOS permission quirks |
 
-## Features
+## The dial
 
-- **One dial** — click anywhere on the arc or drag; an off bulb wakes at the clicked brightness
-- **Targets** — pill switcher for saved devices and groups; group commands fan out concurrently with one aggregated result
-- **Color / Temp / Scenes** — hue wheel with recent hexes, warm-to-cool kelvin rail, twelve WiZ scene presets with color-preview chips; each takes the dial's place (progressive disclosure), `← Back`/Esc returns
-- **Sleep timer** — 15/30/60 presets or custom minutes, live countdown, cancel
-- **Discover** — UDP broadcast scan; devices stream in as cards, save/rename inline
-- **Groups** — create, delete, and tick members in a management overlay; targeting a group fans every command out
-- **Live** — 10-second heartbeat re-syncs state, so changes from the phone app, the TUI, or cron show up here
-- **Shared brain** — reads and writes the same `~/.lumina-config.json` as Lumina-TUI: devices, groups, theme, last state
-- **Easter eggs** — the dial knows certain numbers, and it's not just the dial. That's all the hint you get
+Click anywhere on the arc or drag; scroll to nudge; arrow keys for precision (`⇧` for ±10, `Space` toggles power). Dots mark 25/50/75 and clicks near them snap; the knob rides the arc tip. An off bulb wakes at the clicked brightness.
 
-## Night / Dusk
+## Panels
 
-One toggle, same soul — ☾ near-black or ⛅ muted twilight.
+Each panel takes the dial's place — progressive disclosure, `← Back`/`Esc` returns.
 
-| ☾ Night | ⛅ Dusk |
-|---------|---------|
-| ![Night mode](docs/screenshots/night.png) | ![Dusk mode](docs/screenshots/dusk.png) |
+| Temperature | Color | Scenes |
+|-------------|-------|--------|
+| ![Temp](docs/screenshots/temp.png) | ![Color](docs/screenshots/color.png) | ![Scenes](docs/screenshots/scenes.png) |
+
+- **Temperature** — 2200K–6500K rail with warm / day / cool landmarks
+- **Color** — hue ring plus recent and preset hexes
+- **Scenes** — twelve WiZ presets with color-preview pills. While one plays, the Scenes pill morphs into a live indicator with an ✕ to stop it, visible from every screen:
+
+<div align="center">
+
+![Scene playing](docs/screenshots/scene-playing.png)
+
+</div>
+
+## Live status
+
+One chip per bulb: **green** on · **red** off · **hollow** unreachable. Chips update the instant a command lands and re-sync from the bulbs every 10 seconds — changes from the phone app or TUI show up here too.
+
+## Devices, groups, timer
+
+| Discover | Groups | Timer |
+|----------|--------|-------|
+| ![Discover](docs/screenshots/discover.png) | ![Groups](docs/screenshots/groups.png) | ![Timer](docs/screenshots/timer.png) |
+
+- **Discover** — UDP broadcast scan; bulbs stream in as cards, save/rename inline, offline saved devices stay editable
+- **Groups** — tick members, target the group, commands fan out concurrently; deleting asks twice
+- **Sleep timer** — presets or custom minutes, countdown with absolute end time
+
+## Idle
+
+Leave it alone for 45 seconds and the UI recedes — two light pools in your bulbs' current color roam the window. The app becomes a lamp, not a screen. Any input wakes it in 600ms.
+
+![Idle lightpainting](docs/screenshots/idle-lightpainting.png)
+
+## Themes
+
+Eight moods — ☾ Night, ⛅ Dusk, Macchiato, Frappé, Dracula, Gruvbox, Indigo, Ember — shared with the TUI where names overlap. See [themes](docs/themes.md).
+
+| ☾ Night | ⛅ Dusk | Picker |
+|---------|--------|--------|
+| ![Night](docs/screenshots/night.png) | ![Dusk](docs/screenshots/dusk.png) | ![Themes](docs/screenshots/themes.png) |
+
+## Easter eggs
+
+The dial knows certain numbers, and it's not just the dial. That's all the hint you get.
 
 ## Architecture
 
@@ -68,6 +104,8 @@ The WiZ protocol, discovery, and config layers live in [`Lumina-TUI/pkg`](https:
 - `app.go` — Wails bindings: state fetch, fan-out control, discovery, device/group CRUD
 - `frontend/` — vanilla JS + CSS, no framework; `src/main.js` and `src/style.css` are the whole UI
 - `build/gen_icon.go` — stdlib generator for the Three Lights app icon
+
+Everything persists in `~/.lumina-config.json`, shared with the TUI: devices, groups, theme, last state.
 
 ## Development
 
