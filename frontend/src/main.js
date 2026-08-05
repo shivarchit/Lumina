@@ -133,6 +133,21 @@ function render() {
       n > 1 ? `${n} lights · ${mode}` : `${mode}`;
   }
 
+  // scene playing = whole-app state: the Scenes pill morphs into the
+  // indicator (scene color, live dot, ✕ to stop) wherever you are
+  const sp = el('scenes-pill');
+  if (S.sceneId) {
+    sp.classList.add('sceneplay');
+    sp.style.borderColor = S.sceneColor + '8C';
+    sp.style.color = S.sceneColor;
+    sp.innerHTML = `<span class="live" style="background:${S.sceneColor}"></span>${esc(S.sceneName)}<span class="x">✕</span>`;
+  } else if (sp.classList.contains('sceneplay')) {
+    sp.classList.remove('sceneplay');
+    sp.style.borderColor = '';
+    sp.style.color = '';
+    sp.textContent = 'Scenes';
+  }
+
   // external changes (phone app, TUI) must reach every control — the temp
   // pill and slider are only otherwise written by their own input handler
   el('temp-pill').textContent = `${S.temp}K`;
@@ -151,15 +166,11 @@ function esc(s) {
   ));
 }
 
-function safeColor(c) {
-  return /^#[0-9A-Fa-f]{6}$/.test(c) ? c : '#FFD9A0';
-}
-
 function renderStatusLine() {
   const parts = Object.entries(S.memberStates).map(([name, st]) =>
     st.err
-      ? `<span class="chip"><i class="dot err-dot"></i>${esc(name)} · offline</span>`
-      : `<span class="chip"><i class="dot" style="background:${st.power ? safeColor(st.colorHex) : 'rgba(255,255,255,.25)'}"></i>${esc(name)} · ${st.power ? esc(st.brightness) + '%' : 'off'}</span>`
+      ? `<span class="chip"><i class="dot dot-offline"></i>${esc(name)} · offline</span>`
+      : `<span class="chip"><i class="dot ${st.power ? 'dot-on' : 'dot-off'}"></i>${esc(name)} · ${st.power ? esc(st.brightness) + '%' : 'off'}</span>`
   );
   if (S.health) parts.push(`<span class="ok">${esc(S.health)}</span>`);
   const hint = Object.values(S.memberStates).find((st) => st.hint)?.hint;
@@ -630,6 +641,8 @@ function buildScenes() {
       b.classList.add('on');
       b.style.boxShadow = `0 0 14px ${c1}66`;
       S.sceneId = id;
+      S.sceneName = name;
+      S.sceneColor = c1;
       if (name === 'Party' && ++buildScenes._party % 3 === 0) confetti();
       S.power = true;
       const res = await SetPilot(S.target.targets, { sceneId: id, state: true });
@@ -639,23 +652,30 @@ function buildScenes() {
     };
     grid.appendChild(b);
   }
-  // a running scene has no off switch on the bulb — stopping it means
-  // sending plain white, which overrides the scene program
-  const stop = document.createElement('button');
-  stop.className = 'pill scene-stop';
-  stop.textContent = '✕ Stop scene';
-  stop.onclick = async () => {
-    S.sceneId = null;
-    grid.querySelectorAll('.scene-pill').forEach((p) => { p.classList.remove('on'); p.style.boxShadow = ''; });
-    S.colorHex = '';
-    S.power = true;
-    const res = await SetPilot(S.target.targets, { temp: S.temp, dimming: S.brightness, state: true });
-    S.health = fanoutHealth(res, `scene stopped · back to white ${S.temp}K`);
-    reflectLocal(res.failed);
-    render();
-  };
-  grid.appendChild(stop);
 }
+
+// a running scene has no off switch on the bulb — stopping it means
+// sending plain white, which overrides the scene program
+async function stopScene() {
+  S.sceneId = null;
+  S.sceneName = '';
+  S.sceneColor = '';
+  document.querySelectorAll('.scene-pill').forEach((p) => { p.classList.remove('on'); p.style.boxShadow = ''; });
+  S.colorHex = '';
+  S.power = true;
+  const res = await SetPilot(S.target.targets, { temp: S.temp, dimming: S.brightness, state: true });
+  S.health = fanoutHealth(res, `scene stopped · back to white ${S.temp}K`);
+  reflectLocal(res.failed);
+  render();
+}
+
+// capture phase so the ✕ stops the scene without also toggling the panel
+el('scenes-pill').addEventListener('click', (e) => {
+  if (e.target.classList.contains('x')) {
+    e.stopPropagation();
+    stopScene();
+  }
+}, true);
 
 // ── sleep timer ────────────────────────────────────────────────────
 // ponytail: in-app timer only — dies if the app quits. The TUI/CLI covers
