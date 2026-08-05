@@ -23,6 +23,28 @@ Still failing? Known macOS quirks:
   and occasionally not until the Mac is rebooted (an Apple TCC bug).
 - Each app update is re-signed, which can silently reset the permission — re-check the
   settings pane after updating.
+- The app itself retries: any blocked command re-fires a broadcast (which re-raises
+  the prompt when macOS is willing) and opens the Local Network settings pane for you.
+
+## macOS 27 beta: app never appears in Local Network at all
+
+On macOS 27 beta seeds (e.g. build `26A5388g`), the Local Network registration
+pipeline is broken for newly-seen apps: the prompt never fires, the app never
+appears in the settings pane, and every LAN send fails silently. This hits other
+apps too (Codex Desktop, LightBurn) — it is an OS bug, not something a reinstall,
+permission reset, or re-sign can fix.
+
+Workaround until Apple fixes the seed: launch the app as a **child of a terminal
+that already has Local Network access** — it inherits the terminal's grant:
+
+```bash
+nohup "/Applications/Lumina Desktop.app/Contents/MacOS/Lumina Desktop" >/dev/null 2>&1 &
+```
+
+Add it as an alias (`alias lumina='pkill -x "Lumina Desktop" 2>/dev/null; nohup
+"/Applications/Lumina Desktop.app/Contents/MacOS/Lumina Desktop" >/dev/null 2>&1 &
+disown'`) and launch with one word. Note: the terminal app itself must have the
+grant (check the settings pane) — a terminal that never got it can't lend it.
 
 ## Devices show "offline"
 
