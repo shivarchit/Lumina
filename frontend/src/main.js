@@ -20,6 +20,8 @@ const S = {
 document.querySelector('#app').innerHTML = `
   <span class="blob" id="blob-a"></span>
   <span class="blob" id="blob-b"></span>
+  <span class="paintlayer" id="paint-a"></span>
+  <span class="paintlayer" id="paint-b"></span>
   <div class="stage">
     <nav class="switcher" id="switcher"></nav>
     <p class="target-name" id="target-name">—</p>
@@ -248,6 +250,16 @@ async function syncStates() {
   render();
 }
 
+// Commands don't wait for the 10s heartbeat: every successful send writes
+// the new state straight into memberStates so the chips update instantly.
+function reflectLocal(failed = []) {
+  for (const t of (S.target && S.target.targets) || []) {
+    if (failed.includes(t.name)) continue;
+    const st = S.memberStates[t.name] || (S.memberStates[t.name] = {});
+    Object.assign(st, { err: '', power: S.power, brightness: S.brightness, colorHex: S.colorHex, temp: S.temp });
+  }
+}
+
 let sendTimer = null;
 function debouncedPilot(params) {
   clearTimeout(sendTimer);
@@ -255,6 +267,7 @@ function debouncedPilot(params) {
     const res = await SetPilot(S.target.targets, params);
     S.health = fanoutHealth(res, `${res.ok}/${res.ok} ok · ${res.ms}ms`);
     SetLastState(S.colorHex, S.brightness, S.temp);
+    reflectLocal(res.failed);
     render();
   }, 140);
 }
@@ -621,10 +634,27 @@ function buildScenes() {
       S.power = true;
       const res = await SetPilot(S.target.targets, { sceneId: id, state: true });
       S.health = fanoutHealth(res, `scene ${name} · ${res.ms}ms`);
+      reflectLocal(res.failed);
       render();
     };
     grid.appendChild(b);
   }
+  // a running scene has no off switch on the bulb — stopping it means
+  // sending plain white, which overrides the scene program
+  const stop = document.createElement('button');
+  stop.className = 'pill scene-stop';
+  stop.textContent = '✕ Stop scene';
+  stop.onclick = async () => {
+    S.sceneId = null;
+    grid.querySelectorAll('.scene-pill').forEach((p) => { p.classList.remove('on'); p.style.boxShadow = ''; });
+    S.colorHex = '';
+    S.power = true;
+    const res = await SetPilot(S.target.targets, { temp: S.temp, dimming: S.brightness, state: true });
+    S.health = fanoutHealth(res, `scene stopped · back to white ${S.temp}K`);
+    reflectLocal(res.failed);
+    render();
+  };
+  grid.appendChild(stop);
 }
 
 // ── sleep timer ────────────────────────────────────────────────────
@@ -704,6 +734,7 @@ el('power-pill').onclick = async () => {
   render();
   const res = await SetPower(S.target.targets, next);
   S.health = fanoutHealth(res, `power ${next ? 'on' : 'off'} · ${res.ms}ms`);
+  reflectLocal(res.failed);
   render();
 };
 
@@ -1025,6 +1056,30 @@ function timeEggs() {
     toastEgg('🌅 early bird — dawn palette until sunrise', 3500);
   }
 }
+
+// ── idle lightpainting: after 45s untouched the UI recedes and two light
+// pools in the bulbs' current color take the room; any input wakes it ──
+let idleTimer = null;
+
+function idleEnter() {
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const c = lightColor();
+  if (!c) return; // all off — nothing to paint with
+  el('paint-a').style.background = `radial-gradient(closest-side, ${hexToRgba(c, 0.5)}, transparent 70%)`;
+  el('paint-b').style.background = `radial-gradient(closest-side, ${hexToRgba(c, 0.42)}, transparent 70%)`;
+  document.body.classList.add('paint');
+}
+
+function idleReset() {
+  document.body.classList.remove('paint');
+  clearTimeout(idleTimer);
+  idleTimer = setTimeout(idleEnter, 45_000);
+}
+
+for (const ev of ['pointermove', 'pointerdown', 'keydown', 'wheel']) {
+  window.addEventListener(ev, idleReset, { passive: true });
+}
+idleReset();
 
 // ── boot ───────────────────────────────────────────────────────────
 (async () => {

@@ -310,6 +310,34 @@ html, body {
 }
 /* two-tap delete confirm */
 .pill.confirm { border-color: rgba(255, 122, 110, 0.6); color: #ff9a8f; }
+.scene-stop { grid-column: 1 / -1; color: var(--dim); }
+
+/* idle lightpainting: UI recedes, light pools in the bulbs' color roam */
+.paintlayer {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(52px);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 1200ms ease;
+}
+#paint-a { width: 460px; height: 460px; top: -80px; left: -60px; }
+#paint-b { width: 380px; height: 380px; bottom: -70px; right: -50px; }
+body.paint #paint-a { opacity: 1; animation: lp-a 26s ease-in-out infinite; }
+body.paint #paint-b { opacity: 1; animation: lp-b 21s ease-in-out infinite; }
+@keyframes lp-a {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(90px, 150px) scale(1.25); }
+  66% { transform: translate(-60px, 60px) scale(0.9); }
+}
+@keyframes lp-b {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  40% { transform: translate(-110px, -170px) scale(1.35); }
+  75% { transform: translate(50px, -70px) scale(1.05); }
+}
+.stage > * { transition: opacity 600ms ease; }
+body.paint .stage > *:not(.center) { opacity: 0.07; }
+body.paint .center { opacity: 0.3; transition: opacity 600ms ease; }
 
 .offline .dial-svg { opacity: 0.4; }
 .offline .dial-lab { opacity: 0.55; }
@@ -499,4 +527,5 @@ body.light .overlay { background: rgba(40, 37, 50, 0.6); }
   .egg-66, .egg-candle, .egg-42, .egg-50, .egg-88, .egg-100, .egg-dim, .egg-33, .egg-77, .star { animation: none; }
   .confetti, .ember, .dial-zone.supernova::after { display: none; }
   .dial-zone.supernova { filter: none; }
+  .paintlayer { display: none; }
 }
