@@ -295,7 +295,16 @@ html, body {
   border-radius: 50%;
   display: inline-block;
 }
-.statusline .err-dot { background: var(--err); }
+.statusline .dot-on { background: var(--ok); }
+.statusline .dot-off { background: var(--err); }
+.statusline .dot-offline { background: transparent; border: 1.5px solid rgba(255, 255, 255, 0.3); }
+
+/* scenes pill while a scene plays: live dot + name + ✕ */
+.pill.sceneplay { display: inline-flex; align-items: center; gap: 8px; }
+.pill.sceneplay .live { width: 6px; height: 6px; border-radius: 50%; animation: pulse-live 2s ease-in-out infinite; }
+.pill.sceneplay .x { opacity: 0.65; padding-left: 8px; border-left: 1px solid var(--faint); }
+.pill.sceneplay .x:hover { opacity: 1; }
+@keyframes pulse-live { 50% { opacity: 0.4; } }
 /* midnight stars */
 .star {
   position: fixed;
@@ -310,7 +319,6 @@ html, body {
 }
 /* two-tap delete confirm */
 .pill.confirm { border-color: rgba(255, 122, 110, 0.6); color: #ff9a8f; }
-.scene-stop { grid-column: 1 / -1; color: var(--dim); }
 
 /* idle lightpainting: UI recedes, light pools in the bulbs' color roam */
 .paintlayer {
@@ -524,7 +532,7 @@ body.light .overlay { background: rgba(40, 37, 50, 0.6); }
 @keyframes confetti-fall { to { transform: translateY(110vh) rotate(540deg); opacity: 0.7; } }
 
 @media (prefers-reduced-motion: reduce) {
-  .egg-66, .egg-candle, .egg-42, .egg-50, .egg-88, .egg-100, .egg-dim, .egg-33, .egg-77, .star { animation: none; }
+  .egg-66, .egg-candle, .egg-42, .egg-50, .egg-88, .egg-100, .egg-dim, .egg-33, .egg-77, .star, .pill.sceneplay .live { animation: none; }
   .confetti, .ember, .dial-zone.supernova::after { display: none; }
   .dial-zone.supernova { filter: none; }
   .paintlayer { display: none; }
