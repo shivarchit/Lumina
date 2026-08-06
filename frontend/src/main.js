@@ -878,6 +878,7 @@ el('discover-pill').onclick = async () => {
   const body = openOverlay('Discover');
   body.innerHTML = '<p class="overlay-hint">scanning 255.255.255.255:38899 …</p>';
   lastScan = await Discover();
+  syncStates();
   renderDiscoverCards(body);
 };
 
@@ -1030,6 +1031,7 @@ el('themes-pill').onclick = () => {
       applyThemeKey(key);
       S.cfg.theme = t.store;
       SetTheme(t.store);
+      syncStates();
       grid.querySelectorAll('.theme-pill').forEach((p) => p.classList.remove('on'));
       b.classList.add('on');
     };
@@ -1091,6 +1093,8 @@ function idleEnter() {
 }
 
 function idleReset() {
+  // waking from idle re-checks the bulbs — they may have changed while painting
+  if (document.body.classList.contains('paint')) syncStates();
   document.body.classList.remove('paint');
   clearTimeout(idleTimer);
   idleTimer = setTimeout(idleEnter, 45_000);
