@@ -1031,7 +1031,6 @@ el('themes-pill').onclick = () => {
       applyThemeKey(key);
       S.cfg.theme = t.store;
       SetTheme(t.store);
-      syncStates();
       grid.querySelectorAll('.theme-pill').forEach((p) => p.classList.remove('on'));
       b.classList.add('on');
     };
