@@ -418,16 +418,43 @@ function toastEgg(html, ms = 2500) {
 }
 
 function showEgg(v) {
-  toastEgg(EGG_HTML[v]);
+  toastEgg(EGG_HTML[v], v === 66 ? 4600 : 2500);
   if (v === 66 || v === 13) {
-    // the room obeys: brief blackout behind the toast
+    // the room obeys: blackout behind the toast (66 holds it longer)
     const d = el('egg-dim');
+    d.classList.toggle('dim-o66', v === 66);
     d.hidden = false;
     d.style.animation = 'none';
     void d.offsetWidth; // restart the animation on repeat firings
     d.style.animation = '';
-    setTimeout(() => { d.hidden = true; }, 2500);
+    setTimeout(() => { d.hidden = true; }, v === 66 ? 5000 : 2500);
   }
+  if (v === 66) order66();
+}
+
+// order 66, ambient cut: three saber light columns rise and breathe, four
+// blaster streaks cross with answering pulses, columns die one by one, a
+// red afterglow fades. All timing lives in CSS; this just plants the layer.
+function order66() {
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  document.querySelector('.o66')?.remove(); // restart clean on repeat firings
+  const wrap = document.createElement('div');
+  wrap.className = 'o66';
+  wrap.setAttribute('aria-hidden', 'true');
+  wrap.innerHTML = `
+    <span class="col col-blue"></span>
+    <span class="col col-purple"></span>
+    <span class="col col-green"></span>
+    <span class="streak k1" style="--x0:-60vw; --y0:12vh; --x1:15vw; --y1:6vh; --r:-6deg"></span>
+    <span class="streak k2" style="--x0:60vw; --y0:8vh; --x1:-10vw; --y1:11vh; --r:186deg"></span>
+    <span class="streak k3" style="--x0:-60vw; --y0:6vh; --x1:18vw; --y1:10vh; --r:4deg"></span>
+    <span class="streak k4" style="--x0:60vw; --y0:14vh; --x1:-16vw; --y1:8vh; --r:174deg"></span>
+    <span class="pulse p1"></span>
+    <span class="pulse p2"></span>
+    <span class="pulse p3"></span>
+    <span class="afterglow"></span>`;
+  document.body.appendChild(wrap);
+  setTimeout(() => wrap.remove(), 5300);
 }
 
 function confetti() {
