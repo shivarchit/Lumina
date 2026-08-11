@@ -91,6 +91,7 @@ export namespace main {
 	    failed: string[];
 	    ms: number;
 	    hint?: string;
+	    healed?: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new FanoutResult(source);
@@ -102,6 +103,7 @@ export namespace main {
 	        this.failed = source["failed"];
 	        this.ms = source["ms"];
 	        this.hint = source["hint"];
+	        this.healed = source["healed"];
 	    }
 	}
 	export class StateResult {
@@ -132,6 +134,7 @@ export namespace main {
 	    ip: string;
 	    port: string;
 	    name: string;
+	    mac: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Target(source);
@@ -142,6 +145,7 @@ export namespace main {
 	        this.ip = source["ip"];
 	        this.port = source["port"];
 	        this.name = source["name"];
+	        this.mac = source["mac"];
 	    }
 	}
 

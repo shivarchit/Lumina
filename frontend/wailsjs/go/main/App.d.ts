@@ -4,6 +4,8 @@ import {wiz} from '../models';
 import {config} from '../models';
 import {main} from '../models';
 
+export function CheckUpdate():Promise<string>;
+
 export function DeleteDevice(arg1:string):Promise<void>;
 
 export function DeleteGroup(arg1:string):Promise<void>;
@@ -15,6 +17,8 @@ export function GetConfig():Promise<config.Config>;
 export function GetState(arg1:string,arg2:string):Promise<main.StateResult>;
 
 export function GroupTargets(arg1:string):Promise<Array<main.Target>>;
+
+export function OpenReleases():Promise<void>;
 
 export function SaveDevice(arg1:config.SavedDevice):Promise<void>;
 
