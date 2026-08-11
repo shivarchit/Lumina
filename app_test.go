@@ -117,6 +117,24 @@ func TestLnPromptDebounce(t *testing.T) {
 	}
 }
 
+func TestCheckUpdateSkipsDevBuilds(t *testing.T) {
+	if got := (&App{}).CheckUpdate(); got != "" {
+		t.Fatalf("dev build must never report an update, got %q", got)
+	}
+}
+
+func TestHealDueDebouncesPerMAC(t *testing.T) {
+	if !healDue("11:11") {
+		t.Fatal("first heal attempt must pass")
+	}
+	if healDue("11:11") {
+		t.Fatal("immediate second attempt must be debounced")
+	}
+	if !healDue("22:22") {
+		t.Fatal("different MAC must not share the debounce")
+	}
+}
+
 func TestSaveDeviceRequiresMAC(t *testing.T) {
 	a := &App{}
 	if err := a.SaveDevice(config.SavedDevice{Name: "x", IP: "1.2.3.4"}); err == nil {

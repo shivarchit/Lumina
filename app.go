@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"net/http"
 	"os/exec"
 	"runtime"
 	"sort"
@@ -12,6 +14,7 @@ import (
 
 	"github.com/shivarchit/Lumina-TUI/pkg/config"
 	"github.com/shivarchit/Lumina-TUI/pkg/wiz"
+	wruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 // Target addresses one device for a command.
@@ -28,6 +31,7 @@ type FanoutResult struct {
 	Failed []string `json:"failed"`
 	Ms     int64    `json:"ms"`
 	Hint   string   `json:"hint,omitempty"`
+	Healed bool     `json:"healed,omitempty"` // a stale IP was rewritten; frontend must refresh targets
 }
 
 // hintFor maps a low-level send error to an actionable user hint.
@@ -202,37 +206,62 @@ func (a *App) SetPower(targets []Target, on bool) FanoutResult {
 	return a.fanout(targets, "setState", map[string]interface{}{"state": on})
 }
 
+// healGate debounces per-MAC re-discovery: a dial drag on an offline bulb
+// fires debounced sends every ~140ms, and each would otherwise block 3s in a
+// discovery broadcast.
+var healGate = struct {
+	mu   sync.Mutex
+	last map[string]time.Time
+}{last: map[string]time.Time{}}
+
+func healDue(mac string) bool {
+	healGate.mu.Lock()
+	defer healGate.mu.Unlock()
+	if time.Since(healGate.last[mac]) < 10*time.Second {
+		return false
+	}
+	healGate.last[mac] = time.Now()
+	return true
+}
+
 // send delivers one command; on an unreachable-class error (stale DHCP lease
 // looks identical to a permission denial: "no route to host") it re-resolves
 // the device's current IP by MAC, heals the config, and retries once.
-func (a *App) send(t Target, method string, params map[string]interface{}) error {
-	err := wiz.SendCommand(t.IP, t.Port, method, params)
-	if err == nil || t.Mac == "" || hintFor(err) == "" {
-		return err
+func (a *App) send(t Target, method string, params map[string]interface{}) (healed bool, err error) {
+	err = wiz.SendCommand(t.IP, t.Port, method, params)
+	if err == nil || t.Mac == "" || hintFor(err) == "" || !healDue(t.Mac) {
+		return false, err
 	}
+	// ponytail: blocks this send up to 3s; per-MAC 10s gate keeps it rare.
+	// A true permission denial pays it too — indistinguishable from IP drift.
 	d, derr := wiz.DiscoverDeviceByMAC(t.Mac, t.Port, 3*time.Second)
 	if derr != nil || d.IP == "" || d.IP == t.IP {
-		return err
+		return false, err
 	}
 	a.updateSavedIPs(map[string]string{strings.ToLower(strings.TrimSpace(t.Mac)): d.IP})
-	return wiz.SendCommand(d.IP, t.Port, method, params)
+	return true, wiz.SendCommand(d.IP, t.Port, method, params)
 }
 
 func (a *App) fanout(targets []Target, method string, params map[string]interface{}) FanoutResult {
 	start := time.Now()
 	type result struct {
-		idx int
-		err error
+		idx    int
+		healed bool
+		err    error
 	}
 	results := make(chan result, len(targets))
 	for i, t := range targets {
 		go func(i int, t Target) {
-			results <- result{i, a.send(t, method, params)}
+			healed, err := a.send(t, method, params)
+			results <- result{i, healed, err}
 		}(i, t)
 	}
 	res := FanoutResult{Failed: []string{}}
 	for range targets {
 		r := <-results
+		if r.healed {
+			res.Healed = true
+		}
 		if r.err != nil {
 			name := targets[r.idx].Name
 			if name == "" {
@@ -252,6 +281,38 @@ func (a *App) fanout(targets []Target, method string, params map[string]interfac
 	}
 	res.Ms = time.Since(start).Milliseconds()
 	return res
+}
+
+// appVersion is stamped by release builds via -ldflags "-X main.appVersion=vX.Y.Z".
+var appVersion = "dev"
+
+// CheckUpdate returns the latest release tag when it differs from this build,
+// or "" for up-to-date, dev builds, and network failures.
+func (a *App) CheckUpdate() string {
+	if !strings.HasPrefix(appVersion, "v") {
+		return ""
+	}
+	client := http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Get("https://api.github.com/repos/shivarchit/Lumina/releases/latest")
+	if err != nil {
+		return ""
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return ""
+	}
+	var rel struct {
+		Tag string `json:"tag_name"`
+	}
+	if json.NewDecoder(resp.Body).Decode(&rel) != nil || rel.Tag == "" || rel.Tag == appVersion {
+		return ""
+	}
+	return rel.Tag
+}
+
+// OpenReleases opens the GitHub releases page in the default browser.
+func (a *App) OpenReleases() {
+	wruntime.BrowserOpenURL(a.ctx, "https://github.com/shivarchit/Lumina/releases/latest")
 }
 
 // GetState fetches live state from one device.

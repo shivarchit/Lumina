@@ -2,11 +2,13 @@ import './style.css';
 import {
   GetConfig, GetState, SetPower, SetPilot, SetLastState,
   Discover, SaveDevice, DeleteDevice, SetTheme, SaveGroup, DeleteGroup,
+  CheckUpdate, OpenReleases,
 } from '../wailsjs/go/main/App';
 
 // ── state ──────────────────────────────────────────────────────────
 const S = {
   cfg: { savedDevices: [], groups: [], ip: '', port: '38899' },
+  updateTag: '',      // non-empty release tag = newer version available
   target: null,        // {kind:'group'|'device'|'ip', name, targets:[{ip,port,name}]}
   power: true,
   brightness: 72,
@@ -173,6 +175,7 @@ function renderStatusLine() {
       : `<span class="chip"><i class="dot ${st.power ? 'dot-on' : 'dot-off'}"></i>${esc(name)} · ${st.power ? esc(st.brightness) + '%' : 'off'}</span>`
   );
   if (S.health) parts.push(`<span class="ok">${esc(S.health)}</span>`);
+  if (S.updateTag) parts.push(`<button class="chip update" id="update-chip" title="Open release page"><span class="up">⬆</span> ${esc(S.updateTag)} available</button>`);
   const hint = Object.values(S.memberStates).find((st) => st.hint)?.hint;
   if (hint) parts.push(`<span class="err">${esc(hint)}</span>`);
   const states = Object.values(S.memberStates);
@@ -180,6 +183,8 @@ function renderStatusLine() {
     parts.push('<span class="void">the void stares back 🌑</span>');
   }
   el('statusline').innerHTML = parts.join(' ') || '…';
+  const uc = document.getElementById('update-chip');
+  if (uc) uc.onclick = () => OpenReleases();
 }
 
 // One line for a fan-out result: ok count, failures, and the backend's
@@ -271,11 +276,42 @@ function reflectLocal(failed = []) {
   }
 }
 
+// Backend heals stale saved-device IPs by MAC mid-send; when it reports a
+// heal, refresh our in-memory target IPs so the next command skips the
+// fail-then-rediscover cycle. In-place update — no switcher rebuild, no
+// selection jump.
+async function refreshTargetIPs() {
+  S.cfg = await GetConfig();
+  const byMac = {};
+  for (const d of S.cfg.savedDevices || []) byMac[(d.mac || '').toLowerCase()] = d;
+  for (const t of (S.target && S.target.targets) || []) {
+    const d = byMac[(t.mac || '').toLowerCase()];
+    if (d && d.ip) t.ip = d.ip;
+  }
+}
+
+async function sendPilot(targets, params) {
+  const res = await SetPilot(targets, params);
+  if (res.healed) refreshTargetIPs();
+  return res;
+}
+
+async function sendPower(targets, on) {
+  const res = await SetPower(targets, on);
+  if (res.healed) refreshTargetIPs();
+  return res;
+}
+
 let sendTimer = null;
+let pilotSeq = 0;
 function debouncedPilot(params) {
   clearTimeout(sendTimer);
   sendTimer = setTimeout(async () => {
-    const res = await SetPilot(S.target.targets, params);
+    const seq = ++pilotSeq;
+    const t0 = S.target;
+    const res = await sendPilot(t0.targets, params);
+    // a heal can hold a send for seconds; drop responses the user outran
+    if (seq !== pilotSeq || S.target !== t0) return;
     S.health = fanoutHealth(res, `${res.ok}/${res.ok} ok · ${res.ms}ms`);
     SetLastState(S.colorHex, S.brightness, S.temp);
     reflectLocal(res.failed);
@@ -418,7 +454,7 @@ window.addEventListener('keydown', (e) => {
   konamiIdx = 0;
   if (!S.target) return;
   S.power = true;
-  SetPilot(S.target.targets, { sceneId: 4, state: true });
+  sendPilot(S.target.targets, { sceneId: 4, state: true });
   toastEgg('🎮 KONAMI — party mode');
   confetti();
   render();
@@ -645,7 +681,7 @@ function buildScenes() {
       S.sceneColor = c1;
       if (name === 'Party' && ++buildScenes._party % 3 === 0) confetti();
       S.power = true;
-      const res = await SetPilot(S.target.targets, { sceneId: id, state: true });
+      const res = await sendPilot(S.target.targets, { sceneId: id, state: true });
       S.health = fanoutHealth(res, `scene ${name} · ${res.ms}ms`);
       reflectLocal(res.failed);
       render();
@@ -663,7 +699,7 @@ async function stopScene() {
   document.querySelectorAll('.scene-pill').forEach((p) => { p.classList.remove('on'); p.style.boxShadow = ''; });
   S.colorHex = '';
   S.power = true;
-  const res = await SetPilot(S.target.targets, { temp: S.temp, dimming: S.brightness, state: true });
+  const res = await sendPilot(S.target.targets, { temp: S.temp, dimming: S.brightness, state: true });
   S.health = fanoutHealth(res, `scene stopped · back to white ${S.temp}K`);
   reflectLocal(res.failed);
   render();
@@ -705,7 +741,7 @@ function startTimer(mins) {
   T.until = Date.now() + mins * 60000;
   T.targetName = S.target.name;
   T.handle = setTimeout(async () => {
-    const res = await SetPower(targets, false);
+    const res = await sendPower(targets, false);
     S.power = false;
     S.health = `sleep: ${T.targetName} off (${res.ok} ok)`;
     cancelTimer();
@@ -752,7 +788,7 @@ el('power-pill').onclick = async () => {
   const next = !S.power;
   S.power = next;
   render();
-  const res = await SetPower(S.target.targets, next);
+  const res = await sendPower(S.target.targets, next);
   S.health = fanoutHealth(res, `power ${next ? 'on' : 'off'} · ${res.ms}ms`);
   reflectLocal(res.failed);
   render();
@@ -1131,4 +1167,12 @@ idleReset();
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden) syncStates();
   });
+
+  // update chip: check on launch, then daily while running; "" = up to date
+  const checkUpdate = async () => {
+    S.updateTag = await CheckUpdate();
+    renderStatusLine();
+  };
+  checkUpdate();
+  setInterval(checkUpdate, 24 * 60 * 60 * 1000);
 })();

@@ -67,7 +67,7 @@ jobs:
       - name: Build (macOS)
         if: startsWith(matrix.platform, 'darwin')
         run: |
-          wails build -platform ${{ matrix.platform }} -clean
+          wails build -platform ${{ matrix.platform }} -clean -ldflags "-X main.appVersion=${{ github.ref_name }}"
           mkdir -p dist
           ditto -c -k --keepParent "build/bin/Lumina Desktop.app" "dist/Lumina-Desktop-${{ matrix.name }}.zip"
 
@@ -77,7 +77,7 @@ jobs:
         run: |
           # choco updates the machine PATH, but this step's shell predates it
           export PATH="$PATH:/c/Program Files (x86)/NSIS"
-          wails build -platform ${{ matrix.platform }} -clean -nsis
+          wails build -platform ${{ matrix.platform }} -clean -ldflags "-X main.appVersion=${{ github.ref_name }}" -nsis
           mkdir -p dist
           cp "build/bin/Lumina Desktop-amd64-installer.exe" "dist/Lumina-Desktop-${{ matrix.name }}-installer.exe"
           cd build/bin && 7z a "../../dist/Lumina-Desktop-${{ matrix.name }}.zip" "Lumina Desktop.exe"
@@ -86,7 +86,7 @@ jobs:
         if: startsWith(matrix.platform, 'linux')
         run: |
           # ubuntu-latest (24.04) ships webkit2gtk-4.1 only
-          wails build -platform ${{ matrix.platform }} -clean -tags webkit2_41
+          wails build -platform ${{ matrix.platform }} -clean -ldflags "-X main.appVersion=${{ github.ref_name }}" -tags webkit2_41
           mkdir -p dist staging
           cp "build/bin/Lumina Desktop" staging/lumina-desktop
           tar -C staging -czf "dist/Lumina-Desktop-${{ matrix.name }}.tar.gz" lumina-desktop
