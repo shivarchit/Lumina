@@ -19,6 +19,7 @@ type Target struct {
 	IP   string `json:"ip"`
 	Port string `json:"port"`
 	Name string `json:"name"`
+	Mac  string `json:"mac"`
 }
 
 // FanoutResult aggregates one command sent to N targets.
@@ -73,10 +74,10 @@ var localNet lnPrompt
 // after a blocked send: broadcast traffic re-triggers the system prompt (when
 // macOS is still willing to show it), and the privacy pane opens so the user
 // can flip the toggle by hand. Debounced so a toggle spree doesn't spam.
-func forceLocalNetworkPrompt() {
+func (a *App) forceLocalNetworkPrompt() {
 	prime, pane := localNet.due(time.Now())
 	if prime {
-		go func() { _, _ = wiz.DiscoverDevices() }()
+		go a.refreshSavedIPs()
 	}
 	if pane && runtime.GOOS == "darwin" {
 		go func() {
@@ -119,8 +120,41 @@ func (a *App) startup(ctx context.Context) {
 	}
 	// macOS raises the Local Network permission prompt on broadcast traffic,
 	// not on connected unicast UDP (which is silently dropped when denied).
-	// One background discovery primes the prompt on first launch.
-	go func() { _, _ = wiz.DiscoverDevices() }()
+	// One background discovery primes the prompt on first launch — and heals
+	// saved-device IPs that went stale across DHCP lease changes.
+	go a.refreshSavedIPs()
+}
+
+// refreshSavedIPs broadcasts a discovery and rewrites any saved device whose
+// IP changed since it was saved (DHCP reassignment while the app was closed).
+func (a *App) refreshSavedIPs() {
+	devices, err := wiz.DiscoverDevices()
+	if err != nil {
+		return
+	}
+	byMac := map[string]string{}
+	for _, d := range devices {
+		byMac[strings.ToLower(strings.TrimSpace(d.Mac))] = d.IP
+	}
+	a.updateSavedIPs(byMac)
+}
+
+// updateSavedIPs applies mac→ip fixes to saved devices; persists if changed.
+func (a *App) updateSavedIPs(byMac map[string]string) bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	changed := false
+	for i := range a.cfg.SavedDevices {
+		ip := byMac[strings.ToLower(strings.TrimSpace(a.cfg.SavedDevices[i].Mac))]
+		if ip != "" && ip != a.cfg.SavedDevices[i].IP {
+			a.cfg.SavedDevices[i].IP = ip
+			changed = true
+		}
+	}
+	if changed {
+		a.persist()
+	}
+	return changed
 }
 
 // GetConfig returns the shared config (same file the TUI uses).
@@ -160,15 +194,31 @@ func (a *App) SetLastState(colorHex string, brightness, temp int) {
 
 // SetPilot sends a setPilot command to every target concurrently.
 func (a *App) SetPilot(targets []Target, params map[string]interface{}) FanoutResult {
-	return fanout(targets, "setPilot", params)
+	return a.fanout(targets, "setPilot", params)
 }
 
 // SetPower sends a setState command to every target concurrently.
 func (a *App) SetPower(targets []Target, on bool) FanoutResult {
-	return fanout(targets, "setState", map[string]interface{}{"state": on})
+	return a.fanout(targets, "setState", map[string]interface{}{"state": on})
 }
 
-func fanout(targets []Target, method string, params map[string]interface{}) FanoutResult {
+// send delivers one command; on an unreachable-class error (stale DHCP lease
+// looks identical to a permission denial: "no route to host") it re-resolves
+// the device's current IP by MAC, heals the config, and retries once.
+func (a *App) send(t Target, method string, params map[string]interface{}) error {
+	err := wiz.SendCommand(t.IP, t.Port, method, params)
+	if err == nil || t.Mac == "" || hintFor(err) == "" {
+		return err
+	}
+	d, derr := wiz.DiscoverDeviceByMAC(t.Mac, t.Port, 3*time.Second)
+	if derr != nil || d.IP == "" || d.IP == t.IP {
+		return err
+	}
+	a.updateSavedIPs(map[string]string{strings.ToLower(strings.TrimSpace(t.Mac)): d.IP})
+	return wiz.SendCommand(d.IP, t.Port, method, params)
+}
+
+func (a *App) fanout(targets []Target, method string, params map[string]interface{}) FanoutResult {
 	start := time.Now()
 	type result struct {
 		idx int
@@ -176,9 +226,9 @@ func fanout(targets []Target, method string, params map[string]interface{}) Fano
 	}
 	results := make(chan result, len(targets))
 	for i, t := range targets {
-		go func(i int, ip, port string) {
-			results <- result{i, wiz.SendCommand(ip, port, method, params)}
-		}(i, t.IP, t.Port)
+		go func(i int, t Target) {
+			results <- result{i, a.send(t, method, params)}
+		}(i, t)
 	}
 	res := FanoutResult{Failed: []string{}}
 	for range targets {
@@ -198,7 +248,7 @@ func fanout(targets []Target, method string, params map[string]interface{}) Fano
 	}
 	sort.Strings(res.Failed)
 	if res.Hint != "" {
-		forceLocalNetworkPrompt()
+		a.forceLocalNetworkPrompt()
 	}
 	res.Ms = time.Since(start).Milliseconds()
 	return res
@@ -331,7 +381,7 @@ func (a *App) GroupTargets(name string) []Target {
 			if port == "" {
 				port = a.cfg.Port
 			}
-			targets = append(targets, Target{IP: d.IP, Port: port, Name: d.Name})
+			targets = append(targets, Target{IP: d.IP, Port: port, Name: d.Name, Mac: d.Mac})
 		}
 	}
 	return targets

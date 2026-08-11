@@ -35,9 +35,26 @@ func TestFanoutAggregates(t *testing.T) {
 		{IP: "127.0.0.1", Port: port, Name: "A"},
 		{IP: "127.0.0.1", Port: port, Name: "B"},
 	}
-	res := fanout(targets, "setState", map[string]interface{}{"state": true})
+	res := (&App{}).fanout(targets, "setState", map[string]interface{}{"state": true})
 	if res.OK != 2 || len(res.Failed) != 0 {
 		t.Fatalf("expected 2 ok / 0 failed, got %d/%v", res.OK, res.Failed)
+	}
+}
+
+func TestUpdateSavedIPsHealsByMAC(t *testing.T) {
+	t.Setenv("HOME", t.TempDir()) // persist() writes $HOME/.lumina-config.json
+	a := &App{cfg: config.Config{SavedDevices: []config.SavedDevice{
+		{Name: "Desk", IP: "10.0.0.2", Mac: "aa:aa"},
+		{Name: "Shelf", IP: "10.0.0.3", Mac: "bb:bb"},
+	}}}
+	if !a.updateSavedIPs(map[string]string{"aa:aa": "10.0.0.9"}) {
+		t.Fatal("changed IP must report true")
+	}
+	if a.cfg.SavedDevices[0].IP != "10.0.0.9" || a.cfg.SavedDevices[1].IP != "10.0.0.3" {
+		t.Fatalf("bad heal: %+v", a.cfg.SavedDevices)
+	}
+	if a.updateSavedIPs(map[string]string{"aa:aa": "10.0.0.9", "cc:cc": "10.0.0.1"}) {
+		t.Fatal("same IP / unknown MAC must report false")
 	}
 }
 

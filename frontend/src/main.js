@@ -198,7 +198,7 @@ function hexToRgba(color, a) {
 
 // ── targets ────────────────────────────────────────────────────────
 function deviceTarget(d) {
-  return { kind: 'device', name: d.name || d.ip, targets: [{ ip: d.ip, port: d.port || S.cfg.port, name: d.name || d.ip }] };
+  return { kind: 'device', name: d.name || d.ip, targets: [{ ip: d.ip, port: d.port || S.cfg.port, name: d.name || d.ip, mac: d.mac || '' }] };
 }
 
 function groupTarget(g) {
@@ -207,7 +207,7 @@ function groupTarget(g) {
   const targets = (g.macs || [])
     .map((m) => byMac[(m || '').toLowerCase()])
     .filter((d) => d && d.ip)
-    .map((d) => ({ ip: d.ip, port: d.port || S.cfg.port, name: d.name || d.ip }));
+    .map((d) => ({ ip: d.ip, port: d.port || S.cfg.port, name: d.name || d.ip, mac: d.mac || '' }));
   return { kind: 'group', name: g.name, targets };
 }
 
