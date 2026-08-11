@@ -515,6 +515,63 @@ body.light .overlay { background: rgba(40, 37, 50, 0.6); }
 }
 .egg-dim[hidden] { display: none; }
 @keyframes dim66 { 0%, 15% { opacity: 0; } 35%, 70% { opacity: 0.55; } 100% { opacity: 0; } }
+/* order 66 runs a longer, deeper blackout than 13 */
+.egg-dim.dim-o66 { animation: dimO66 5s ease-in-out forwards; }
+@keyframes dimO66 { 0% { opacity: 0; } 10%, 82% { opacity: 0.8; } 100% { opacity: 0; } }
+
+/* order 66: ambient cut — saber light columns rise and breathe, blaster
+   streaks cross, each answered by a soft pulse, columns die one by one,
+   a red afterglow, then the room comes back. Blurred light only — same
+   vocabulary as the ambient blobs. */
+.o66 { position: fixed; inset: 0; z-index: 36; pointer-events: none; overflow: hidden; }
+.o66 .col {
+  position: absolute; bottom: -10%; width: 60px; height: 65%;
+  opacity: 0; filter: blur(22px); transform-origin: bottom center;
+}
+.o66 .col-blue   { left: 14%; background: linear-gradient(180deg, transparent, rgba(79,168,255,0.55) 30%, rgba(79,168,255,0.75)); rotate: -8deg; }
+.o66 .col-green  { right: 13%; background: linear-gradient(180deg, transparent, rgba(79,220,100,0.5) 30%, rgba(79,220,100,0.7)); rotate: 7deg; }
+.o66 .col-purple { left: 47%; background: linear-gradient(180deg, transparent, rgba(178,79,255,0.45) 30%, rgba(178,79,255,0.65)); rotate: 2deg; height: 55%; }
+.o66 .col-blue   { animation: o66rise 0.9s 0.35s cubic-bezier(0.16,1,0.3,1) forwards, o66breathe 1.4s 1.3s ease-in-out, o66fade 0.8s 2.9s ease-in forwards; }
+.o66 .col-purple { animation: o66rise 0.9s 0.55s cubic-bezier(0.16,1,0.3,1) forwards, o66breathe 1.4s 1.5s ease-in-out, o66fade 0.8s 3.3s ease-in forwards; }
+.o66 .col-green  { animation: o66rise 0.9s 0.75s cubic-bezier(0.16,1,0.3,1) forwards, o66breathe 1.4s 1.7s ease-in-out, o66fade 0.8s 3.7s ease-in forwards; }
+@keyframes o66rise { from { opacity: 0; transform: scaleY(0.3) translateY(40px); } to { opacity: 1; transform: scaleY(1) translateY(0); } }
+@keyframes o66breathe { 0%, 100% { opacity: 1; } 50% { opacity: 0.75; } }
+@keyframes o66fade { 0% { opacity: 1; transform: scaleY(1); } 100% { opacity: 0; transform: scaleY(0.85) translateY(20px); } }
+.o66 .streak {
+  position: absolute; top: 50%; left: 50%; width: 120px; height: 2px; border-radius: 2px;
+  background: linear-gradient(90deg, transparent, rgba(120,190,255,0.9));
+  filter: blur(1.5px);
+  box-shadow: 0 0 12px 2px rgba(79,168,255,0.35);
+  opacity: 0;
+  animation: o66streak 0.5s cubic-bezier(0.4,0,1,1) forwards;
+}
+@keyframes o66streak {
+  0% { opacity: 0; transform: translate(var(--x0), var(--y0)) rotate(var(--r)); }
+  15% { opacity: 1; }
+  85% { opacity: 0.9; }
+  100% { opacity: 0; transform: translate(var(--x1), var(--y1)) rotate(var(--r)); }
+}
+.o66 .k1 { animation-delay: 2s; } .o66 .k2 { animation-delay: 2.45s; }
+.o66 .k3 { animation-delay: 2.85s; } .o66 .k4 { animation-delay: 3.25s; }
+.o66 .pulse {
+  position: absolute; width: 120px; height: 120px; border-radius: 50%;
+  opacity: 0; filter: blur(18px); transform: scale(0.5);
+  animation: o66pulse 0.7s ease-out forwards;
+}
+.o66 .p1 { left: 10%; bottom: 26%; background: radial-gradient(circle, rgba(120,190,255,0.5), transparent 70%); animation-delay: 2.42s; }
+.o66 .p2 { left: 42%; bottom: 22%; background: radial-gradient(circle, rgba(178,120,255,0.45), transparent 70%); animation-delay: 3.24s; }
+.o66 .p3 { right: 9%; bottom: 24%; background: radial-gradient(circle, rgba(120,220,140,0.45), transparent 70%); animation-delay: 3.66s; }
+@keyframes o66pulse {
+  0% { opacity: 0; transform: scale(0.5); }
+  30% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.35); }
+}
+.o66 .afterglow {
+  position: absolute; inset: 0; opacity: 0;
+  background: radial-gradient(ellipse at 50% 115%, rgba(255,59,48,0.22), transparent 55%);
+  animation: o66aglow 1.6s 3.6s ease-in-out forwards;
+}
+@keyframes o66aglow { 0% { opacity: 0; } 45% { opacity: 1; } 100% { opacity: 0; } }
 .egg-66 { color: #FF3B30; font-weight: 700; letter-spacing: 0.1em; animation: saber 1.2s ease-in-out infinite; }
 @keyframes saber { 0%, 100% { text-shadow: 0 0 8px rgba(255, 59, 48, 0.6); } 50% { text-shadow: 0 0 22px rgba(255, 59, 48, 1); } }
 .egg-candle { display: inline-block; animation: flick 0.18s ease-in-out infinite alternate; }
@@ -545,7 +602,7 @@ body.light .overlay { background: rgba(40, 37, 50, 0.6); }
 
 @media (prefers-reduced-motion: reduce) {
   .egg-66, .egg-candle, .egg-42, .egg-50, .egg-88, .egg-100, .egg-dim, .egg-33, .egg-77, .star, .pill.sceneplay .live { animation: none; }
-  .confetti, .ember, .dial-zone.supernova::after { display: none; }
+  .confetti, .ember, .o66, .dial-zone.supernova::after { display: none; }
   .dial-zone.supernova { filter: none; }
   .paintlayer { display: none; }
 }
