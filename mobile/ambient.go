@@ -39,8 +39,9 @@ func bakeGlow(col color.NRGBA) image.Image {
 			if d >= 1 {
 				continue
 			}
-			// bright core easing into a wide soft corona
-			a := math.Pow(1-d, 2.2)*0.85 + (1-d)*0.15
+			// bright core easing into a wide soft corona; (1-d²)ⁿ keeps the
+			// tail smooth so the texture edge never reads as a boundary
+			a := math.Pow(1-d*d, 2.6) * 0.9
 			p := col
 			p.A = uint8(a * 255)
 			img.SetNRGBA(x, y, p)
@@ -74,7 +75,7 @@ func (a *aura) place(s fyne.Size) {
 		return
 	}
 	y := s.Height * float32(0.56-0.24*a.level)
-	w := s.Width * 1.9
+	w := s.Width * 2.6 // big enough that the texture edge stays off-screen
 	a.img.Resize(fyne.NewSize(w, w))
 	a.img.Move(fyne.NewPos(s.Width/2-w/2, y-w/2))
 }

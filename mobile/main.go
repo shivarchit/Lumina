@@ -327,8 +327,10 @@ func (u *ui) showHome() {
 			u.refreshAura()
 		},
 	)
+	hint := monoText("SLIDE ↑ ↓ TO DIM", 8, withAlpha(colText, 0x4D))
+	hint.Alignment = fyne.TextAlignCenter
 	center := container.NewStack(field,
-		container.NewCenter(container.NewVBox(numRow, u.descTxt, gap(10), container.NewCenter(u.pwWord))))
+		container.NewCenter(container.NewVBox(numRow, u.descTxt, gap(4), hint, gap(8), container.NewCenter(u.pwWord))))
 
 	u.content.Objects = []fyne.CanvasObject{container.NewBorder(head, u.sheet(), nil, nil, center)}
 	u.content.Refresh()
@@ -412,29 +414,32 @@ func (u *ui) sheet() fyne.CanvasObject {
 		body = u.scenesSheet()
 	case "timer":
 		body = u.timerSheet()
-	case "more":
-		body = u.moreSheet()
+	case "themes":
+		body = u.themesSheet()
 	default:
 		body = u.lightSheet()
 	}
 
 	nav := container.NewHBox(layout.NewSpacer())
-	for _, t := range []string{"light", "scenes", "timer", "more"} {
+	for _, t := range []string{"light", "scenes", "timer", "themes", "manage"} {
 		t := t
 		c := colDim
 		if u.tab == t {
 			c = colAccent
 		}
-		nav.Add(newWord(strings.ToUpper(t), 11, c, func() { u.tab = t; u.showHome() }))
+		nav.Add(newWord(strings.ToUpper(t), 11, c, func() {
+			if t == "manage" {
+				u.showManage(false)
+				return
+			}
+			u.tab = t
+			u.showHome()
+		}))
 	}
 	nav.Add(layout.NewSpacer())
 
-	grab := canvas.NewRectangle(color.NRGBA{R: 0xFF, G: 0xFF, B: 0xFF, A: 0x33})
-	grab.CornerRadius = 2
-	grab.SetMinSize(fyne.NewSize(34, 4))
-
 	inner := container.NewVBox(
-		gap(12), container.NewCenter(grab), gap(6),
+		gap(14),
 		body,
 		nav,
 		container.NewCenter(u.status),
@@ -590,7 +595,7 @@ func (u *ui) timerSheet() fyne.CanvasObject {
 }
 
 // more: themes + manage entry
-func (u *ui) moreSheet() fyne.CanvasObject {
+func (u *ui) themesSheet() fyne.CanvasObject {
 	grid := container.NewGridWithColumns(2)
 	cur := paletteFor(u.eng.GetConfig().Theme)
 	for _, p := range palettes {
@@ -606,8 +611,7 @@ func (u *ui) moreSheet() fyne.CanvasObject {
 			u.showHome()
 		}))
 	}
-	manage := newWord("MANAGE DEVICES →", 12, colAccent, func() { u.showManage(false) })
-	return container.NewVBox(sheetLabel("theme"), grid, gap(8), container.NewCenter(manage), gap(4))
+	return container.NewVBox(sheetLabel("theme"), grid, gap(4))
 }
 
 // ── manage: full-height sheet ───────────────────────────────────────
