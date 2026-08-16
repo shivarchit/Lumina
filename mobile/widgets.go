@@ -4,6 +4,7 @@ import (
 	"image"
 	"image/color"
 	"math"
+	"strconv"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
@@ -28,14 +29,21 @@ func monoText(s string, size float32, c color.Color) *canvas.Text {
 	return t
 }
 
+// gap is a fixed-height transparent spacer.
+func gap(h float32) fyne.CanvasObject {
+	r := canvas.NewRectangle(colTransparent)
+	r.SetMinSize(fyne.NewSize(1, h))
+	return r
+}
+
 // ── pill: the app's mono rounded-border button ──────────────────────
 
 type pill struct {
 	widget.BaseWidget
 	text     string
 	on       bool
-	accent   color.NRGBA // border/text when on
-	tint     color.NRGBA // semantic color shown even when off (zero = none)
+	accent   color.NRGBA // border/text color
+	tinted   bool        // accent visible even when off (semantic buttons)
 	size     float32
 	onTapped func()
 
@@ -53,8 +61,8 @@ func newPill(text string, tapped func()) *pill {
 // save=green, close=amber) so intent reads before any interaction.
 func newTintPill(text string, tint color.NRGBA, tapped func()) *pill {
 	p := newPill(text, tapped)
-	p.tint = tint
 	p.accent = tint
+	p.tinted = true
 	return p
 }
 
@@ -100,10 +108,10 @@ func (r *pillRenderer) Refresh() {
 		r.p.bg.StrokeColor = r.p.accent
 		r.p.bg.FillColor = withAlpha(r.p.accent, 0x1A)
 		r.p.lbl.Color = r.p.accent
-	case r.p.tint.A > 0:
-		r.p.bg.StrokeColor = withAlpha(r.p.tint, 0x66)
-		r.p.bg.FillColor = withAlpha(r.p.tint, 0x0D)
-		r.p.lbl.Color = r.p.tint
+	case r.p.tinted:
+		r.p.bg.StrokeColor = withAlpha(r.p.accent, 0x66)
+		r.p.bg.FillColor = withAlpha(r.p.accent, 0x0D)
+		r.p.lbl.Color = r.p.accent
 	default:
 		r.p.bg.StrokeColor = colFaint
 		r.p.bg.FillColor = color.NRGBA{R: 0xFF, G: 0xFF, B: 0xFF, A: 0x05}
@@ -115,6 +123,122 @@ func (r *pillRenderer) Refresh() {
 
 func (r *pillRenderer) Objects() []fyne.CanvasObject { return []fyne.CanvasObject{r.p.bg, r.p.lbl} }
 func (r *pillRenderer) Destroy()                     {}
+
+// ── gslider: draggable gradient bar (temp kelvin ramp, color hue) ───
+
+// gslider geometry: one pad shared by hit-testing (dp) and bar drawing
+// (as a fraction of height, so it holds at any pixel density).
+const (
+	gsliderPad float32 = 14
+	gsliderH   float32 = 44
+)
+
+type gslider struct {
+	widget.BaseWidget
+	min, max, value float64
+	grad            func(v float64) color.NRGBA // value (not frac) → color
+	onChange, onEnd func(v float64)
+
+	raster *canvas.Raster
+	thumb  *canvas.Circle
+}
+
+func newGSlider(min, max, val float64, grad func(float64) color.NRGBA, onChange, onEnd func(float64)) *gslider {
+	g := &gslider{min: min, max: max, value: val, grad: grad, onChange: onChange, onEnd: onEnd}
+	g.ExtendBaseWidget(g)
+	return g
+}
+
+func (g *gslider) frac() float64 { return (g.value - g.min) / (g.max - g.min) }
+
+func (g *gslider) setFromX(x float32) {
+	pad := gsliderPad
+	f := float64((x - pad) / (g.Size().Width - 2*pad))
+	f = math.Max(0, math.Min(1, f))
+	g.value = g.min + f*(g.max-g.min)
+	g.Refresh()
+	if g.onChange != nil {
+		g.onChange(g.value)
+	}
+}
+
+func (g *gslider) Dragged(e *fyne.DragEvent) { g.setFromX(e.Position.X) }
+func (g *gslider) DragEnd() {
+	if g.onEnd != nil {
+		g.onEnd(g.value)
+	}
+}
+func (g *gslider) Tapped(e *fyne.PointEvent) {
+	g.setFromX(e.Position.X)
+	if g.onEnd != nil {
+		g.onEnd(g.value)
+	}
+}
+
+func (g *gslider) MinSize() fyne.Size { return fyne.NewSize(280, gsliderH) }
+
+func (g *gslider) CreateRenderer() fyne.WidgetRenderer {
+	g.raster = canvas.NewRaster(g.drawBar)
+	g.thumb = canvas.NewCircle(colAccent)
+	g.thumb.StrokeColor = color.NRGBA{R: 0xFF, G: 0xFF, B: 0xFF, A: 0xE6}
+	g.thumb.StrokeWidth = 2
+	return &gsliderRenderer{g: g}
+}
+
+// drawBar renders a rounded gradient bar with feathered edges.
+func (g *gslider) drawBar(w, h int) image.Image {
+	img := image.NewNRGBA(image.Rect(0, 0, w, h))
+	if w == 0 || h == 0 {
+		return img
+	}
+	// px-space geometry; pad scales as a height fraction so it matches
+	// the dp-space gsliderPad at any density
+	barH := float64(h) * 0.28
+	cy := float64(h) / 2
+	pad := float64(h) * float64(gsliderPad/gsliderH)
+	r := barH / 2
+	x0, x1 := pad+r, float64(w)-pad-r
+	feather := 1.5
+	for y := 0; y < h; y++ {
+		for x := 0; x < w; x++ {
+			fx, fy := float64(x), float64(y)
+			cx := math.Max(x0, math.Min(x1, fx))
+			b := r - math.Hypot(fx-cx, fy-cy)
+			if b <= -feather {
+				continue
+			}
+			frac := (cx - x0) / (x1 - x0)
+			c := g.grad(g.min + frac*(g.max-g.min))
+			c.A = uint8(float64(0xE0) * math.Max(0, math.Min(1, b/feather+1)))
+			img.SetNRGBA(x, y, c)
+		}
+	}
+	return img
+}
+
+type gsliderRenderer struct{ g *gslider }
+
+func (r *gsliderRenderer) MinSize() fyne.Size { return r.g.MinSize() }
+func (r *gsliderRenderer) Layout(s fyne.Size) {
+	r.g.raster.Resize(s)
+	r.g.raster.Refresh()
+	r.Refresh()
+}
+func (r *gsliderRenderer) Refresh() {
+	g := r.g
+	s := g.Size()
+	d := float32(22)
+	x := gsliderPad + float32(g.frac())*(s.Width-2*gsliderPad) - d/2
+	g.thumb.FillColor = g.grad(g.value)
+	g.thumb.Resize(fyne.NewSize(d, d))
+	g.thumb.Move(fyne.NewPos(x, s.Height/2-d/2))
+	g.thumb.Refresh()
+	// bar is value-independent — only Layout (resize) re-rasters it
+}
+func (r *gsliderRenderer) Objects() []fyne.CanvasObject {
+	return []fyne.CanvasObject{r.g.raster, r.g.thumb}
+}
+func (r *gsliderRenderer) Destroy() {}
 
 // ── dial: draggable brightness arc, tap center for power ────────────
 //
@@ -147,8 +271,10 @@ func newDial(onEnd func(int), onPower func(bool)) *dial {
 	return d
 }
 
+func clampPct(v float64) float64 { return math.Max(10, math.Min(100, v)) }
+
 func (d *dial) set(v float64, power bool) {
-	d.value = math.Max(10, math.Min(100, v))
+	d.value = clampPct(v)
 	d.power = power
 	d.Refresh()
 }
@@ -165,7 +291,7 @@ func (d *dial) angleToPct(dx, dy float64) (float64, bool) {
 	if pos < 0 {
 		pos += 360
 	}
-	return math.Max(10, math.Min(100, pos/dialSweep*100)), true
+	return clampPct(pos / dialSweep * 100), true
 }
 
 func (d *dial) Dragged(e *fyne.DragEvent) {
@@ -236,7 +362,7 @@ func (d *dial) drawRing(w, h int) image.Image {
 	}
 	sx, sy := capAt(dialGapTo)            // sweep start (bottom-left)
 	ex, ey := capAt(dialGapFrom)          // track end (bottom-right)
-	vx, vy := capAt(dialGapTo + filled - 360*math.Floor((dialGapTo+filled)/360)) // value end
+	vx, vy := capAt(math.Mod(dialGapTo+filled, 360)) // value end
 
 	capR := thick / 2
 	feather := 1.5
@@ -288,7 +414,7 @@ func (d *dial) drawRing(w, h int) image.Image {
 
 type dialRenderer struct{ d *dial }
 
-func (r *dialRenderer) MinSize() fyne.Size { return fyne.NewSize(240, 240) }
+func (r *dialRenderer) MinSize() fyne.Size { return r.d.MinSize() }
 
 func (r *dialRenderer) Layout(s fyne.Size) {
 	d := r.d
@@ -307,7 +433,7 @@ func (r *dialRenderer) Layout(s fyne.Size) {
 
 func (r *dialRenderer) Refresh() {
 	d := r.d
-	d.valTxt.Text = itoa(int(math.Round(d.value)))
+	d.valTxt.Text = strconv.Itoa(int(math.Round(d.value)))
 	if d.power {
 		d.pwrTxt.Text = "ON"
 		d.pwrTxt.Color = colOK
@@ -328,10 +454,3 @@ func (r *dialRenderer) Objects() []fyne.CanvasObject {
 	return []fyne.CanvasObject{d.raster, d.valTxt, d.pctTxt, d.labTxt, d.pwrTxt}
 }
 func (r *dialRenderer) Destroy() {}
-
-func itoa(v int) string {
-	if v >= 100 {
-		return "100"
-	}
-	return string([]byte{byte('0' + v/10), byte('0' + v%10)})
-}

@@ -9,64 +9,53 @@ import (
 	"fyne.io/fyne/v2/container"
 )
 
-// ambientLayer is the passive background: faint bulb silhouettes drifting
-// slowly, like dust in lamplight. Pure decoration — pointer-transparent,
-// low alpha, no interaction.
-type bulbSpec struct {
-	x, y   float32 // anchor as fraction of screen
-	r      float32 // glass radius px
-	period float64 // seconds per drift loop
-	phase  float64
+// ambientLayer: rising embers — tiny warm light motes floating up like dust
+// in lamplight (option B from the ambient mockup). Pure light, no shapes,
+// pointer-transparent, colors follow the active theme accent.
+type emberSpec struct {
+	x      float32 // horizontal anchor as fraction of width
+	size   float32 // px
+	period float64 // seconds for one bottom-to-top pass
+	phase  float64 // 0..1 offset so they don't march in step
+	sway   float64 // horizontal wander in px
+	alpha  uint8
 }
 
-var bulbSpecs = []bulbSpec{
-	{0.15, 0.16, 26, 26, 0},
-	{0.82, 0.24, 18, 34, 1.7},
-	{0.68, 0.62, 30, 30, 3.1},
-	{0.22, 0.74, 16, 38, 4.4},
-	{0.50, 0.42, 12, 24, 5.2},
-	{0.88, 0.82, 22, 42, 2.3},
+var emberSpecs = []emberSpec{
+	{0.08, 5, 24, 0.00, 22, 0x3C}, {0.18, 3, 31, 0.45, 14, 0x2E},
+	{0.29, 6, 21, 0.80, 30, 0x46}, {0.38, 2, 36, 0.15, 12, 0x24},
+	{0.47, 4, 27, 0.60, 20, 0x38}, {0.56, 3, 33, 0.30, 16, 0x2A},
+	{0.66, 5, 23, 0.90, 26, 0x40}, {0.74, 2, 38, 0.05, 10, 0x20},
+	{0.83, 4, 26, 0.55, 18, 0x34}, {0.91, 3, 30, 0.70, 24, 0x2C},
+	{0.25, 4, 29, 0.25, 20, 0x30}, {0.62, 6, 20, 0.40, 28, 0x44},
 }
 
-func newAmbient() fyne.CanvasObject {
+func newAmbient() (fyne.CanvasObject, *fyne.Animation) {
 	layer := container.NewWithoutLayout()
-	var bulbs []*fyne.Container
-	for _, s := range bulbSpecs {
-		glass := canvas.NewCircle(colTransparent)
-		glass.StrokeColor = withAlpha(colAccent, 0x1E)
-		glass.StrokeWidth = 1.5
-		glass.Resize(fyne.NewSize(s.r*2, s.r*2))
-
-		glow := canvas.NewCircle(withAlpha(colAccent, 0x10))
-		glow.Resize(fyne.NewSize(s.r*1.1, s.r*1.1))
-		glow.Move(fyne.NewPos(s.r*0.45, s.r*0.45))
-
-		base := canvas.NewRectangle(withAlpha(colAccent, 0x18))
-		base.CornerRadius = 2
-		base.Resize(fyne.NewSize(s.r*0.7, s.r*0.28))
-		base.Move(fyne.NewPos(s.r*0.65, s.r*2+2))
-
-		b := container.NewWithoutLayout(glass, glow, base)
-		layer.Add(b)
-		bulbs = append(bulbs, b)
+	var embers []*canvas.RadialGradient
+	for _, s := range emberSpecs {
+		e := canvas.NewRadialGradient(withAlpha(colAccent, s.alpha), colTransparent)
+		e.Resize(fyne.NewSize(s.size*4, s.size*4)) // glow halo is 4x the core
+		layer.Add(e)
+		embers = append(embers, e)
 	}
 
-	// one shared animation drives every bulb on its own sine path
 	start := time.Now()
 	anim := fyne.NewAnimation(time.Hour, func(float32) {
 		t := time.Since(start).Seconds()
 		size := layer.Size()
-		if size.Width == 0 {
+		if size.Height == 0 {
 			return
 		}
-		for i, s := range bulbSpecs {
-			w := 2 * math.Pi / s.period
-			dx := float32(10 * math.Sin(w*t+s.phase))
-			dy := float32(16 * math.Sin(w*t*0.7+s.phase*1.3))
-			bulbs[i].Move(fyne.NewPos(size.Width*s.x+dx, size.Height*s.y+dy))
+		for i, s := range emberSpecs {
+			p := t/s.period + s.phase
+			p -= math.Floor(p) // 0..1, wraps forever
+			y := size.Height*1.05 - float32(p)*size.Height*1.15
+			x := size.Width*s.x + float32(s.sway*math.Sin(2*math.Pi*p*2.2+s.phase*7))
+			embers[i].Move(fyne.NewPos(x, y))
 		}
 	})
 	anim.RepeatCount = fyne.AnimationRepeatForever
 	anim.Start()
-	return layer
+	return layer, anim
 }

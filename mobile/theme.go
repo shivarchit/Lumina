@@ -9,8 +9,8 @@ import (
 
 // Theme palettes mirror desktop (frontend/src/main.js THEMES); store names
 // stay TUI-compatible so all three apps share one config value.
+// Store is the config value (mocha = desktop's "night", latte = "dusk").
 type palette struct {
-	Key    string
 	Store  string
 	Label  string
 	BG     color.NRGBA
@@ -24,14 +24,14 @@ func hex(v uint32) color.NRGBA {
 }
 
 var palettes = []palette{
-	{"night", "mocha", "☾ NIGHT", hex(0x0A0A0F), hex(0x020203), hex(0xF8F8F4), hex(0xFFD9A0)},
-	{"dusk", "latte", "⛅ DUSK", hex(0x575072), hex(0x35304A), hex(0xF5F2FA), hex(0xFFC6A0)},
-	{"macchiato", "macchiato", "MACCHIATO", hex(0x24273A), hex(0x181926), hex(0xCAD3F5), hex(0xC6A0F6)},
-	{"frappe", "frappe", "FRAPPÉ", hex(0x303446), hex(0x232634), hex(0xC6D0F5), hex(0xCA9EE6)},
-	{"dracula", "dracula", "DRACULA", hex(0x282A36), hex(0x1D1E26), hex(0xF8F8F2), hex(0xBD93F9)},
-	{"gruvbox", "gruvbox", "GRUVBOX", hex(0x282828), hex(0x1D2021), hex(0xEBDBB2), hex(0xD3869B)},
-	{"indigo", "indigo", "INDIGO", hex(0x0F172A), hex(0x020617), hex(0xE2E8F0), hex(0x818CF8)},
-	{"ember", "ember", "EMBER", hex(0x1C120C), hex(0x0A0503), hex(0xF5E9DF), hex(0xFF9E64)},
+	{"mocha", "☾ NIGHT", hex(0x0A0A0F), hex(0x020203), hex(0xF8F8F4), hex(0xFFD9A0)},
+	{"latte", "⛅ DUSK", hex(0x575072), hex(0x35304A), hex(0xF5F2FA), hex(0xFFC6A0)},
+	{"macchiato", "MACCHIATO", hex(0x24273A), hex(0x181926), hex(0xCAD3F5), hex(0xC6A0F6)},
+	{"frappe", "FRAPPÉ", hex(0x303446), hex(0x232634), hex(0xC6D0F5), hex(0xCA9EE6)},
+	{"dracula", "DRACULA", hex(0x282A36), hex(0x1D1E26), hex(0xF8F8F2), hex(0xBD93F9)},
+	{"gruvbox", "GRUVBOX", hex(0x282828), hex(0x1D2021), hex(0xEBDBB2), hex(0xD3869B)},
+	{"indigo", "INDIGO", hex(0x0F172A), hex(0x020617), hex(0xE2E8F0), hex(0x818CF8)},
+	{"ember", "EMBER", hex(0x1C120C), hex(0x0A0503), hex(0xF5E9DF), hex(0xFF9E64)},
 }
 
 // Active palette tokens — package globals read at render time; switching
@@ -53,7 +53,7 @@ var (
 
 func paletteFor(store string) palette {
 	for _, p := range palettes {
-		if p.Store == store || p.Key == store {
+		if p.Store == store {
 			return p
 		}
 	}

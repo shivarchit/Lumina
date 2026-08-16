@@ -44,6 +44,9 @@ type StateResult struct {
 	Hint       string `json:"hint,omitempty"`
 }
 
+// NormMac is the one canonical MAC form used for every comparison and map key.
+func NormMac(s string) string { return strings.ToLower(strings.TrimSpace(s)) }
+
 // Unreachable reports whether err is the unreachable-class failure that both a
 // stale DHCP lease and a macOS Local Network denial produce (EHOSTUNREACH).
 // It gates the heal-by-MAC retry on every platform.
@@ -137,7 +140,7 @@ func (c *Core) RefreshSavedIPs() {
 	}
 	byMac := map[string]string{}
 	for _, d := range devices {
-		byMac[strings.ToLower(strings.TrimSpace(d.Mac))] = d.IP
+		byMac[NormMac(d.Mac)] = d.IP
 	}
 	c.UpdateSavedIPs(byMac)
 }
@@ -148,7 +151,7 @@ func (c *Core) UpdateSavedIPs(byMac map[string]string) bool {
 	defer c.mu.Unlock()
 	changed := false
 	for i := range c.cfg.SavedDevices {
-		ip := byMac[strings.ToLower(strings.TrimSpace(c.cfg.SavedDevices[i].Mac))]
+		ip := byMac[NormMac(c.cfg.SavedDevices[i].Mac)]
 		if ip != "" && ip != c.cfg.SavedDevices[i].IP {
 			c.cfg.SavedDevices[i].IP = ip
 			changed = true
@@ -219,7 +222,7 @@ func (c *Core) send(t Target, method string, params map[string]interface{}) (hea
 	if derr != nil || d.IP == "" || d.IP == t.IP {
 		return false, err
 	}
-	c.UpdateSavedIPs(map[string]string{strings.ToLower(strings.TrimSpace(t.Mac)): d.IP})
+	c.UpdateSavedIPs(map[string]string{NormMac(t.Mac): d.IP})
 	return true, wiz.SendCommand(d.IP, t.Port, method, params)
 }
 
@@ -311,7 +314,7 @@ func (c *Core) Discover() []wiz.Device {
 
 // SaveDevice upserts a saved device keyed by MAC and persists.
 func (c *Core) SaveDevice(d config.SavedDevice) error {
-	mac := strings.ToLower(strings.TrimSpace(d.Mac))
+	mac := NormMac(d.Mac)
 	if mac == "" {
 		return fmt.Errorf("cannot save device without MAC")
 	}
@@ -319,7 +322,7 @@ func (c *Core) SaveDevice(d config.SavedDevice) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	for i := range c.cfg.SavedDevices {
-		if strings.ToLower(strings.TrimSpace(c.cfg.SavedDevices[i].Mac)) == mac {
+		if NormMac(c.cfg.SavedDevices[i].Mac) == mac {
 			c.cfg.SavedDevices[i] = d
 			c.persist()
 			return nil
@@ -332,12 +335,12 @@ func (c *Core) SaveDevice(d config.SavedDevice) error {
 
 // DeleteDevice removes a saved device by MAC and from any groups.
 func (c *Core) DeleteDevice(mac string) {
-	mac = strings.ToLower(strings.TrimSpace(mac))
+	mac = NormMac(mac)
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	kept := c.cfg.SavedDevices[:0]
 	for _, d := range c.cfg.SavedDevices {
-		if strings.ToLower(strings.TrimSpace(d.Mac)) != mac {
+		if NormMac(d.Mac) != mac {
 			kept = append(kept, d)
 		}
 	}
@@ -345,7 +348,7 @@ func (c *Core) DeleteDevice(mac string) {
 	for gi := range c.cfg.Groups {
 		macs := c.cfg.Groups[gi].Macs[:0]
 		for _, m := range c.cfg.Groups[gi].Macs {
-			if strings.ToLower(strings.TrimSpace(m)) != mac {
+			if NormMac(m) != mac {
 				macs = append(macs, m)
 			}
 		}
@@ -388,13 +391,36 @@ func (c *Core) DeleteGroup(name string) {
 	c.persist()
 }
 
+// toTarget builds a Target from a saved device, applying the port fallback.
+// The single place that rule lives — both frontends resolve through it.
+func toTarget(d config.SavedDevice, defaultPort string) Target {
+	port := d.Port
+	if port == "" {
+		port = defaultPort
+	}
+	return Target{IP: d.IP, Port: port, Name: d.Name, Mac: d.Mac}
+}
+
+// DeviceTargets resolves one saved device (by MAC) to a target list.
+func (c *Core) DeviceTargets(mac string) []Target {
+	mac = NormMac(mac)
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for _, d := range c.cfg.SavedDevices {
+		if NormMac(d.Mac) == mac && d.IP != "" {
+			return []Target{toTarget(d, c.cfg.Port)}
+		}
+	}
+	return nil
+}
+
 // GroupTargets resolves a group's MACs to targets via saved devices.
 func (c *Core) GroupTargets(name string) []Target {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	byMac := map[string]config.SavedDevice{}
 	for _, d := range c.cfg.SavedDevices {
-		byMac[strings.ToLower(strings.TrimSpace(d.Mac))] = d
+		byMac[NormMac(d.Mac)] = d
 	}
 	var targets []Target
 	for _, g := range c.cfg.Groups {
@@ -402,15 +428,11 @@ func (c *Core) GroupTargets(name string) []Target {
 			continue
 		}
 		for _, mac := range g.Macs {
-			d, ok := byMac[strings.ToLower(strings.TrimSpace(mac))]
+			d, ok := byMac[NormMac(mac)]
 			if !ok || d.IP == "" {
 				continue
 			}
-			port := d.Port
-			if port == "" {
-				port = c.cfg.Port
-			}
-			targets = append(targets, Target{IP: d.IP, Port: port, Name: d.Name, Mac: d.Mac})
+			targets = append(targets, toTarget(d, c.cfg.Port))
 		}
 	}
 	return targets
