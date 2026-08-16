@@ -7,8 +7,26 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
+	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/widget"
 )
+
+// glassCard wraps content in the app's rounded glass surface.
+func glassCard(content fyne.CanvasObject) fyne.CanvasObject {
+	bg := canvas.NewRectangle(color.NRGBA{R: 0xFF, G: 0xFF, B: 0xFF, A: 0x06})
+	bg.StrokeColor = colFaint
+	bg.StrokeWidth = 1
+	bg.CornerRadius = 18
+	return container.NewStack(bg, container.NewPadded(container.NewPadded(content)))
+}
+
+// monoText is a mono canvas label in the app's type voice.
+func monoText(s string, size float32, c color.Color) *canvas.Text {
+	t := canvas.NewText(s, c)
+	t.TextSize = size
+	t.TextStyle = fyne.TextStyle{Monospace: true}
+	return t
+}
 
 // ── pill: the app's mono rounded-border button ──────────────────────
 

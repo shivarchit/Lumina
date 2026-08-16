@@ -141,13 +141,24 @@ func (u *ui) showHome() {
 			u.sel = strings.ToLower(cfg.SavedDevices[0].Mac)
 		}
 	}
+	// empty state: no devices yet — invite straight into discover
+	if cfg := u.eng.GetConfig(); len(cfg.SavedDevices) == 0 {
+		msg := monoText("NO DEVICES ADDED", 11, colDim)
+		msg.Alignment = fyne.TextAlignCenter
+		go2 := newPill("✚ DISCOVER DEVICES", func() { u.showManage(true) })
+		go2.setOn(true)
+		u.content.Objects = []fyne.CanvasObject{container.NewCenter(
+			container.NewVBox(msg, widget.NewLabel(""), container.NewCenter(go2)),
+		)}
+		u.content.Refresh()
+		return
+	}
+
 	name, sub := u.targetLabel()
 	title := canvas.NewText(name, colText)
-	title.TextSize = 17
+	title.TextSize = 19
 	title.Alignment = fyne.TextAlignCenter
-	subT := canvas.NewText(strings.ToUpper(sub), colDim)
-	subT.TextSize = 9
-	subT.TextStyle = fyne.TextStyle{Monospace: true}
+	subT := monoText(strings.ToUpper(sub), 9, colDim)
 	subT.Alignment = fyne.TextAlignCenter
 
 	var center fyne.CanvasObject
@@ -168,11 +179,23 @@ func (u *ui) showHome() {
 		modes.Add(p)
 	}
 
+	gap := func(h float32) fyne.CanvasObject {
+		r := canvas.NewRectangle(colTransparent)
+		r.SetMinSize(fyne.NewSize(1, h))
+		return r
+	}
+	// one centered column — no dead voids between title, dial, and modes
 	u.content.Objects = []fyne.CanvasObject{container.NewBorder(
-		container.NewVBox(u.switcher(), title, subT),
-		container.NewVBox(container.NewCenter(modes), container.NewCenter(u.status)),
-		nil, nil,
-		container.NewCenter(center),
+		u.switcher(), nil, nil, nil,
+		container.NewCenter(container.NewVBox(
+			title, subT,
+			gap(26),
+			container.NewCenter(center),
+			gap(26),
+			container.NewCenter(modes),
+			gap(8),
+			container.NewCenter(u.status),
+		)),
 	)}
 	u.content.Refresh()
 }
@@ -286,17 +309,19 @@ func (u *ui) switcher() fyne.CanvasObject {
 		p.setOn(u.sel == key)
 		row.Add(p)
 	}
-	plus := newPill("✚", func() { u.showManage() })
+	plus := newPill("✚", func() { u.showManage(false) })
 	return container.NewBorder(nil, nil, nil, plus, container.NewHScroll(row))
 }
 
 // ── manage screen ───────────────────────────────────────────────────
 
-func (u *ui) showManage() {
-	head := container.NewBorder(nil, nil,
-		widget.NewLabel("Manage"),
+func (u *ui) showManage(autoScan bool) {
+	title := canvas.NewText("Manage", colText)
+	title.TextSize = 19
+	head := container.NewPadded(container.NewBorder(nil, nil,
+		title,
 		newPill("✕", func() { u.showHome() }),
-	)
+	))
 
 	body := container.NewVBox()
 	rebuild := func() { u.buildManageBody(body) }
@@ -307,16 +332,68 @@ func (u *ui) showManage() {
 		head,
 		container.NewCenter(u.status),
 		nil, nil,
-		container.NewVScroll(body),
+		container.NewVScroll(container.NewPadded(body)),
 	)}
 	u.content.Refresh()
+	if autoScan {
+		u.scan()
+	}
+}
+
+// scan discovers, saves anything new (keeping user names), rebuilds manage.
+func (u *ui) scan() {
+	u.setStatus("scanning…", colDim)
+	go func() {
+		found := u.eng.Discover()
+		saved := map[string]bool{}
+		for _, d := range u.eng.GetConfig().SavedDevices {
+			saved[strings.ToLower(strings.TrimSpace(d.Mac))] = true
+		}
+		fresh := 0
+		for _, d := range found {
+			if !saved[strings.ToLower(strings.TrimSpace(d.Mac))] {
+				name := d.Name
+				if name == "" {
+					name = d.Model
+				}
+				if u.eng.SaveDevice(config.SavedDevice{Name: name, IP: d.IP, Mac: d.Mac}) == nil {
+					fresh++
+				}
+			}
+		}
+		fyne.Do(func() {
+			u.setStatus(fmt.Sprintf("found %d · added %d", len(found), fresh), colOK)
+			if u.manageRebuild != nil {
+				u.manageRebuild()
+			}
+		})
+	}()
 }
 
 func (u *ui) sectionLabel(s string) fyne.CanvasObject {
-	t := canvas.NewText(strings.ToUpper(s), colDim)
-	t.TextSize = 9
-	t.TextStyle = fyne.TextStyle{Monospace: true}
-	return container.NewPadded(t)
+	return container.NewPadded(monoText(strings.ToUpper(s), 9, colDim))
+}
+
+// deviceTitle renders a card's name + mono metadata column.
+func deviceTitle(name, meta string) fyne.CanvasObject {
+	n := canvas.NewText(name, colText)
+	n.TextSize = 14
+	return container.NewVBox(n, monoText(meta, 9, colDim))
+}
+
+// confirmPill turns a DELETE pill into a two-tap confirm.
+func confirmPill(onConfirm func()) *pill {
+	var del *pill
+	del = newPill("DELETE", func() {
+		if del.text != "SURE?" {
+			del.text = "SURE?"
+			del.accent = colErr
+			del.setOn(true)
+			return
+		}
+		onConfirm()
+	})
+	return del
 }
 
 func (u *ui) buildManageBody(body *fyne.Container) {
@@ -325,56 +402,21 @@ func (u *ui) buildManageBody(body *fyne.Container) {
 
 	// discover
 	body.Add(u.sectionLabel("discover"))
-	body.Add(newPill("SCAN NETWORK", func() {
-		u.setStatus("scanning…", colDim)
-		go func() {
-			found := u.eng.Discover()
-			saved := map[string]bool{}
-			for _, d := range u.eng.GetConfig().SavedDevices {
-				saved[strings.ToLower(strings.TrimSpace(d.Mac))] = true
-			}
-			fresh := 0
-			for _, d := range found {
-				if !saved[strings.ToLower(strings.TrimSpace(d.Mac))] {
-					name := d.Name
-					if name == "" {
-						name = d.Model
-					}
-					if u.eng.SaveDevice(config.SavedDevice{Name: name, IP: d.IP, Mac: d.Mac}) == nil {
-						fresh++
-					}
-				}
-			}
-			fyne.Do(func() {
-				u.setStatus(fmt.Sprintf("found %d · added %d", len(found), fresh), colOK)
-				if u.manageRebuild != nil {
-					u.manageRebuild()
-				}
-			})
-		}()
-	}))
+	body.Add(container.NewCenter(newPill("SCAN NETWORK", u.scan)))
 
 	// saved devices: rename inline, two-tap delete
 	body.Add(u.sectionLabel("saved devices"))
 	for _, d := range cfg.SavedDevices {
 		d := d
-		lbl := widget.NewLabel(fmt.Sprintf("%s\n%s · %s", d.Name, d.IP, d.Mac))
-		row := container.NewBorder(nil, nil, nil, nil, lbl)
-		rename := newPill("RENAME", nil)
-		var del *pill
-		del = newPill("DELETE", func() {
-			if del.text != "SURE?" {
-				del.text = "SURE?"
-				del.accent = colErr
-				del.setOn(true)
-				return
-			}
+		row := container.NewStack(deviceTitle(d.Name, d.IP+" · "+d.Mac))
+		del := confirmPill(func() {
 			u.eng.DeleteDevice(d.Mac)
 			if u.sel == strings.ToLower(d.Mac) {
 				u.sel = ""
 			}
 			u.manageRebuild()
 		})
+		rename := newPill("RENAME", nil)
 		rename.onTapped = func() {
 			entry := widget.NewEntry()
 			entry.SetText(d.Name)
@@ -389,29 +431,22 @@ func (u *ui) buildManageBody(body *fyne.Container) {
 			row.Objects = []fyne.CanvasObject{container.NewBorder(nil, nil, nil, save, entry)}
 			row.Refresh()
 		}
-		body.Add(container.NewBorder(nil, nil, nil, container.NewHBox(rename, del), row))
+		body.Add(glassCard(container.NewBorder(nil, nil, nil, container.NewHBox(rename, del), row)))
 	}
 
 	// groups
 	body.Add(u.sectionLabel("groups"))
 	for _, g := range cfg.Groups {
 		g := g
-		lbl := widget.NewLabel(fmt.Sprintf("◇ %s · %d devices", g.Name, len(g.Macs)))
-		var del *pill
-		del = newPill("DELETE", func() {
-			if del.text != "SURE?" {
-				del.text = "SURE?"
-				del.accent = colErr
-				del.setOn(true)
-				return
-			}
+		del := confirmPill(func() {
 			u.eng.DeleteGroup(g.Name)
 			if u.sel == "g:"+g.Name {
 				u.sel = ""
 			}
 			u.manageRebuild()
 		})
-		body.Add(container.NewBorder(nil, nil, nil, del, lbl))
+		body.Add(glassCard(container.NewBorder(nil, nil, nil, del,
+			deviceTitle("◇ "+g.Name, fmt.Sprintf("%d devices", len(g.Macs))))))
 	}
 
 	// group composer
@@ -441,9 +476,11 @@ func (u *ui) buildManageBody(body *fyne.Container) {
 		}
 		u.manageRebuild()
 	})
-	body.Add(nameEntry)
-	body.Add(container.NewHScroll(memberRow))
-	body.Add(container.NewCenter(create))
+	body.Add(glassCard(container.NewVBox(
+		nameEntry,
+		container.NewHScroll(memberRow),
+		container.NewBorder(nil, nil, nil, create),
+	)))
 	body.Refresh()
 }
 

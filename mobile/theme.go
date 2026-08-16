@@ -18,6 +18,8 @@ var (
 	colAccent = color.NRGBA{R: 0xFF, G: 0xD9, B: 0xA0, A: 0xFF}
 	colOK     = color.NRGBA{R: 0xA6, G: 0xE3, B: 0xA1, A: 0xFF}
 	colErr    = color.NRGBA{R: 0xF3, G: 0x8B, B: 0xA8, A: 0xFF}
+
+	colTransparent = color.NRGBA{}
 )
 
 func withAlpha(c color.NRGBA, a uint8) color.NRGBA { c.A = a; return c }
@@ -46,4 +48,15 @@ func (t *luminaTheme) Color(name fyne.ThemeColorName, _ fyne.ThemeVariant) color
 		return colFaint
 	}
 	return t.Theme.Color(name, theme.VariantDark)
+}
+
+// Softer corners on stock widgets (entries, sliders, buttons).
+func (t *luminaTheme) Size(name fyne.ThemeSizeName) float32 {
+	switch name {
+	case theme.SizeNameInputRadius:
+		return 14
+	case theme.SizeNameSelectionRadius:
+		return 8
+	}
+	return t.Theme.Size(name)
 }
