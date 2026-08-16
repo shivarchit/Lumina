@@ -253,8 +253,9 @@ const (
 
 type dial struct {
 	widget.BaseWidget
-	value   float64 // 10..100
+	value   float64     // 10..100
 	power   bool
+	tint    color.NRGBA // arc color = current light color (zero → theme accent)
 	onEnd   func(v int) // fired on drag end
 	onPower func(on bool)
 
@@ -349,9 +350,12 @@ func (d *dial) drawRing(w, h int) image.Image {
 	thick := rOut * 0.19
 	rMid := rOut - thick/2
 	track := color.NRGBA{R: 0xFF, G: 0xFF, B: 0xFF, A: 0x12}
-	fill := colAccent
+	fill := d.tint
+	if fill.A == 0 {
+		fill = colAccent
+	}
 	if !d.power {
-		fill = withAlpha(colAccent, 0x40)
+		fill = withAlpha(fill, 0x40)
 	}
 	filled := d.value / 100 * dialSweep
 
@@ -371,40 +375,49 @@ func (d *dial) drawRing(w, h int) image.Image {
 			fx, fy := float64(x), float64(y)
 			dx, dy := fx-cx, fy-cy
 
-			// signed coverage of the band and each cap; the max wins
-			band := -1e9
-			var c color.NRGBA
-			if b := capR - math.Abs(math.Hypot(dx, dy)-rMid); b > -feather {
-				a := math.Atan2(dx, -dy) * 180 / math.Pi
-				if a < 0 {
-					a += 360
-				}
-				if !(a > dialGapFrom && a < dialGapTo) {
-					pos := a - dialGapTo
-					if pos < 0 {
-						pos += 360
-					}
-					band = b
-					c = track
-					if pos <= filled {
-						c = fill
-					}
-				}
-			}
-			for _, cap := range [][3]float64{{sx, sy, 1}, {vx, vy, 1}, {ex, ey, 0}} {
-				if b := capR - math.Hypot(fx-cap[0], fy-cap[1]); b > band {
-					band = b
-					if cap[2] == 1 {
-						c = fill
-					} else {
-						c = track
-					}
-				}
-			}
+			// annulus test first: cap centers sit on rMid, so any pixel a cap
+			// covers is inside this band too (triangle inequality) — skipping
+			// early spares 3 Hypots on ~75% of the raster every frame
+			band := capR - math.Abs(math.Hypot(dx, dy)-rMid)
 			if band <= -feather {
 				continue
 			}
-			edge := math.Max(0, math.Min(1, band/feather+1))
+			// separate fill/track coverage; fill always wins overlap so the
+			// arc tip stays rounded over the track (no dark notch at 100%)
+			fillCov, trackCov := -1e9, -1e9
+			a := math.Atan2(dx, -dy) * 180 / math.Pi
+			if a < 0 {
+				a += 360
+			}
+			if !(a > dialGapFrom && a < dialGapTo) {
+				pos := a - dialGapTo
+				if pos < 0 {
+					pos += 360
+				}
+				if pos <= filled {
+					fillCov = band
+				} else {
+					trackCov = band
+				}
+			}
+			if b := capR - math.Hypot(fx-sx, fy-sy); b > fillCov {
+				fillCov = b
+			}
+			if b := capR - math.Hypot(fx-vx, fy-vy); b > fillCov {
+				fillCov = b
+			}
+			if b := capR - math.Hypot(fx-ex, fy-ey); b > trackCov {
+				trackCov = b
+			}
+
+			c, cov := fill, fillCov
+			if fillCov <= -feather {
+				if trackCov <= -feather {
+					continue
+				}
+				c, cov = track, trackCov
+			}
+			edge := math.Max(0, math.Min(1, cov/feather+1))
 			c.A = uint8(float64(c.A) * edge)
 			img.SetNRGBA(x, y, c)
 		}

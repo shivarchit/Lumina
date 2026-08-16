@@ -8,6 +8,7 @@ import (
 	"math"
 	"os"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -20,6 +21,7 @@ import (
 	"Lumina/core"
 
 	"github.com/shivarchit/Lumina-TUI/pkg/config"
+	"github.com/shivarchit/Lumina-TUI/pkg/wiz"
 )
 
 // Scene names/IDs/colors match desktop (frontend/src/main.js SCENES).
@@ -222,11 +224,27 @@ func (u *ui) dialView() fyne.CanvasObject {
 			go func() { u.report(lab, u.eng.SetPower(ts, on)) }()
 		},
 	)
-	if b := u.eng.GetConfig().LastBrightness; b > 0 {
-		u.dial.set(float64(b), true)
+	cfg := u.eng.GetConfig()
+	if c, ok := lightColor(cfg.LastColor, cfg.LastColorTemp); ok {
+		u.dial.tint = c
+	}
+	if cfg.LastBrightness > 0 {
+		u.dial.set(float64(cfg.LastBrightness), true)
 	}
 	u.syncState()
 	return u.dial
+}
+
+// lightColor resolves the light's output color from a hex string (preferred)
+// or a kelvin temp — the single fallback policy for boot, sync, and views.
+func lightColor(hexStr string, temp int) (color.NRGBA, bool) {
+	if r, g, b, err := wiz.HexToRGB(strings.TrimSpace(hexStr)); err == nil {
+		return color.NRGBA{R: r, G: g, B: b, A: 0xFF}, true
+	}
+	if temp > 0 {
+		return kelvinColor(float64(temp)), true
+	}
+	return color.NRGBA{}, false
 }
 
 // syncState pulls live device state into the dial (single-device targets).
@@ -242,9 +260,14 @@ func (u *ui) syncState() {
 			return
 		}
 		fyne.Do(func() {
-			if u.dial == d { // still on the same dial view
-				d.set(float64(st.Brightness), st.Power)
+			if u.dial != d { // user already left this dial view
+				return
 			}
+			// arc mirrors what the bulb is actually emitting
+			if c, ok := lightColor(st.ColorHex, st.Temp); ok {
+				d.tint = c
+			}
+			d.set(float64(st.Brightness), st.Power)
 		})
 	}()
 }
@@ -304,6 +327,7 @@ func (u *ui) tempView() fyne.CanvasObject {
 		setPreview,
 		func(v float64) {
 			u.sendPilot(fmt.Sprintf("%dK", int(v)), map[string]interface{}{"temp": int(v), "state": true})
+			u.eng.ClearLastColor() // white mode: temp, not the old RGB, restores the arc
 			u.eng.SetLastState("", 0, int(v))
 		})
 
@@ -452,14 +476,27 @@ func (u *ui) timerView() fyne.CanvasObject {
 		presets.Add(newPill(fmt.Sprintf("%dM", m), func() { start(m) }))
 	}
 
+	mins := widget.NewEntry()
+	mins.SetPlaceHolder("minutes")
+	startP := newTintPill("START", colOK, func() {
+		m, err := strconv.Atoi(strings.TrimSpace(mins.Text))
+		if err != nil || m < 1 || m > 720 {
+			u.setStatus("minutes must be 1–720", colErr)
+			return
+		}
+		start(m)
+	})
+	manual := container.NewHBox(container.NewGridWrap(fyne.NewSize(130, 44), mins), startP)
+
 	// ponytail: in-app timer only — dies if the app quits, same as desktop.
 	box := container.NewVBox(
 		disp, sub,
 		widget.NewLabel(""),
 		container.NewCenter(presets),
+		container.NewCenter(manual),
 		container.NewCenter(cancel),
 	)
-	return container.NewGridWrap(fyne.NewSize(320, 240), box)
+	return container.NewGridWrap(fyne.NewSize(320, 300), box)
 }
 
 func (u *ui) scenesView() fyne.CanvasObject {
@@ -468,6 +505,8 @@ func (u *ui) scenesView() fyne.CanvasObject {
 		sc := sc
 		p := newTintPill(sc.Name, sc.Tint, func() {
 			u.sendPilot(strings.ToLower(sc.Name), map[string]interface{}{"sceneId": sc.ID, "state": true})
+			// persist the scene's tint so the dial arc restores it after relaunch
+			u.eng.SetLastState(fmt.Sprintf("#%02x%02x%02x", sc.Tint.R, sc.Tint.G, sc.Tint.B), 0, 0)
 		})
 		p.size = 10
 		grid.Add(container.NewPadded(p))

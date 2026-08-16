@@ -198,6 +198,15 @@ func (c *Core) SetLastState(colorHex string, brightness, temp int) {
 	c.persist()
 }
 
+// ClearLastColor forgets the RGB override so a white-temp restore wins;
+// SetLastState treats "" as "leave unchanged" and can't express this.
+func (c *Core) ClearLastColor() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.cfg.LastColor = ""
+	c.persist()
+}
+
 // SetPilot sends a setPilot command to every target concurrently.
 func (c *Core) SetPilot(targets []Target, params map[string]interface{}) FanoutResult {
 	return c.Fanout(targets, "setPilot", params)
