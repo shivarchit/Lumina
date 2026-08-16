@@ -35,6 +35,7 @@ type pill struct {
 	text     string
 	on       bool
 	accent   color.NRGBA // border/text when on
+	tint     color.NRGBA // semantic color shown even when off (zero = none)
 	size     float32
 	onTapped func()
 
@@ -45,6 +46,15 @@ type pill struct {
 func newPill(text string, tapped func()) *pill {
 	p := &pill{text: text, accent: colAccent, size: 12, onTapped: tapped}
 	p.ExtendBaseWidget(p)
+	return p
+}
+
+// newTintPill is a pill whose semantic color is always visible (delete=red,
+// save=green, close=amber) so intent reads before any interaction.
+func newTintPill(text string, tint color.NRGBA, tapped func()) *pill {
+	p := newPill(text, tapped)
+	p.tint = tint
+	p.accent = tint
 	return p
 }
 
@@ -85,11 +95,16 @@ func (r *pillRenderer) Layout(s fyne.Size) {
 
 func (r *pillRenderer) Refresh() {
 	r.p.lbl.Text = r.p.text
-	if r.p.on {
+	switch {
+	case r.p.on:
 		r.p.bg.StrokeColor = r.p.accent
-		r.p.bg.FillColor = colGlass
+		r.p.bg.FillColor = withAlpha(r.p.accent, 0x1A)
 		r.p.lbl.Color = r.p.accent
-	} else {
+	case r.p.tint.A > 0:
+		r.p.bg.StrokeColor = withAlpha(r.p.tint, 0x66)
+		r.p.bg.FillColor = withAlpha(r.p.tint, 0x0D)
+		r.p.lbl.Color = r.p.tint
+	default:
 		r.p.bg.StrokeColor = colFaint
 		r.p.bg.FillColor = color.NRGBA{R: 0xFF, G: 0xFF, B: 0xFF, A: 0x05}
 		r.p.lbl.Color = colDim
@@ -199,7 +214,8 @@ func (d *dial) CreateRenderer() fyne.WidgetRenderer {
 	return &dialRenderer{d: d}
 }
 
-// drawRing renders track + value arc with a 1px feathered edge.
+// drawRing renders track + value arc with rounded end caps and a soft
+// feathered edge (no more flat-chopped ends).
 func (d *dial) drawRing(w, h int) image.Image {
 	img := image.NewNRGBA(image.Rect(0, 0, w, h))
 	cx, cy := float64(w)/2, float64(h)/2
@@ -209,32 +225,60 @@ func (d *dial) drawRing(w, h int) image.Image {
 	track := color.NRGBA{R: 0xFF, G: 0xFF, B: 0xFF, A: 0x12}
 	fill := colAccent
 	if !d.power {
-		fill = color.NRGBA{R: colAccent.R, G: colAccent.G, B: colAccent.B, A: 0x40}
+		fill = withAlpha(colAccent, 0x40)
 	}
 	filled := d.value / 100 * dialSweep
+
+	// cap centers sit on the ring's midline at a given clock angle
+	capAt := func(deg float64) (float64, float64) {
+		rad := deg * math.Pi / 180
+		return cx + rMid*math.Sin(rad), cy - rMid*math.Cos(rad)
+	}
+	sx, sy := capAt(dialGapTo)            // sweep start (bottom-left)
+	ex, ey := capAt(dialGapFrom)          // track end (bottom-right)
+	vx, vy := capAt(dialGapTo + filled - 360*math.Floor((dialGapTo+filled)/360)) // value end
+
+	capR := thick / 2
+	feather := 1.5
 	for y := 0; y < h; y++ {
 		for x := 0; x < w; x++ {
-			dx, dy := float64(x)-cx, float64(y)-cy
-			band := thick/2 - math.Abs(math.Hypot(dx, dy)-rMid)
-			if band < -1 {
+			fx, fy := float64(x), float64(y)
+			dx, dy := fx-cx, fy-cy
+
+			// signed coverage of the band and each cap; the max wins
+			band := -1e9
+			var c color.NRGBA
+			if b := capR - math.Abs(math.Hypot(dx, dy)-rMid); b > -feather {
+				a := math.Atan2(dx, -dy) * 180 / math.Pi
+				if a < 0 {
+					a += 360
+				}
+				if !(a > dialGapFrom && a < dialGapTo) {
+					pos := a - dialGapTo
+					if pos < 0 {
+						pos += 360
+					}
+					band = b
+					c = track
+					if pos <= filled {
+						c = fill
+					}
+				}
+			}
+			for _, cap := range [][3]float64{{sx, sy, 1}, {vx, vy, 1}, {ex, ey, 0}} {
+				if b := capR - math.Hypot(fx-cap[0], fy-cap[1]); b > band {
+					band = b
+					if cap[2] == 1 {
+						c = fill
+					} else {
+						c = track
+					}
+				}
+			}
+			if band <= -feather {
 				continue
 			}
-			a := math.Atan2(dx, -dy) * 180 / math.Pi
-			if a < 0 {
-				a += 360
-			}
-			if a > dialGapFrom && a < dialGapTo {
-				continue
-			}
-			pos := a - dialGapTo
-			if pos < 0 {
-				pos += 360
-			}
-			c := track
-			if pos <= filled {
-				c = fill
-			}
-			edge := math.Max(0, math.Min(1, band+1))
+			edge := math.Max(0, math.Min(1, band/feather+1))
 			c.A = uint8(float64(c.A) * edge)
 			img.SetNRGBA(x, y, c)
 		}

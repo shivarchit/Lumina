@@ -4,10 +4,13 @@ package main
 
 import (
 	"fmt"
+	"image"
 	"image/color"
+	"math"
 	"os"
 	"runtime"
 	"strings"
+	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
@@ -20,38 +23,47 @@ import (
 	"github.com/shivarchit/Lumina-TUI/pkg/config"
 )
 
-// Scene names/IDs match desktop (frontend/src/main.js SCENES).
+// Scene names/IDs/colors match desktop (frontend/src/main.js SCENES).
 var scenes = []struct {
 	Name string
 	ID   int
+	Tint color.NRGBA
 }{
-	{"OCEAN", 1}, {"ROMANCE", 2}, {"SUNSET", 3}, {"PARTY", 4},
-	{"FIREPLACE", 5}, {"COZY", 6}, {"FOREST", 7}, {"PASTEL", 8},
-	{"WAKE-UP", 9}, {"BEDTIME", 10}, {"DAYLIGHT", 12}, {"FOCUS", 15},
+	{"OCEAN", 1, hex(0x0891B2)}, {"ROMANCE", 2, hex(0xF472B6)},
+	{"SUNSET", 3, hex(0xFB923C)}, {"PARTY", 4, hex(0xE879F9)},
+	{"FIREPLACE", 5, hex(0xF97316)}, {"COZY", 6, hex(0xFDBA74)},
+	{"FOREST", 7, hex(0x4ADE80)}, {"PASTEL", 8, hex(0xF9A8D4)},
+	{"WAKE-UP", 9, hex(0xFDE68A)}, {"BEDTIME", 10, hex(0x818CF8)},
+	{"DAYLIGHT", 12, hex(0xFCD34D)}, {"FOCUS", 15, hex(0x7DD3FC)},
 }
 
 type ui struct {
+	app fyne.App
 	eng *core.Core
 	win fyne.Window
 
 	sel           string // selected target: device MAC or "g:"+group name
-	mode          string // dim | temp | scenes
+	mode          string // bright | temp | scenes | timer
 	status        *canvas.Text
 	dial          *dial
 	content       *fyne.Container // swapped between home and manage
 	manageRebuild func()
+
+	timerEnd time.Time
+	timerT   *time.Timer
 }
 
 func main() {
 	a := app.NewWithID("com.shivarchit.lumina")
-	a.Settings().SetTheme(newLuminaTheme())
 	// Android has no usable $HOME; point the shared config at app storage.
 	if runtime.GOOS == "android" {
 		if root := a.Storage().RootURI().Path(); root != "" {
 			os.Setenv("HOME", root)
 		}
 	}
-	u := &ui{eng: core.New(), mode: "dim", win: a.NewWindow("Lumina")}
+	u := &ui{app: a, eng: core.New(), mode: "bright", win: a.NewWindow("Lumina")}
+	applyPalette(paletteFor(u.eng.GetConfig().Theme))
+	a.Settings().SetTheme(newLuminaTheme())
 	u.status = canvas.NewText("", colDim)
 	u.status.TextSize = 10
 	u.status.TextStyle = fyne.TextStyle{Monospace: true}
@@ -62,11 +74,17 @@ func main() {
 		u.sel = strings.ToLower(cfg.SavedDevices[0].Mac)
 	}
 
-	bg := canvas.NewLinearGradient(colBG, colBGDeep, 0)
-	glow := canvas.NewRadialGradient(withAlpha(colAccent, 0x24), withAlpha(colAccent, 0x00))
-	u.win.SetContent(container.NewStack(bg, container.New(&glowLayout{}, glow), u.content))
+	u.setChrome()
 	u.showHome()
 	u.win.ShowAndRun()
+}
+
+// setChrome (re)builds the themed backdrop: gradient, glow, ambient bulbs.
+// Called at boot and again on every theme switch.
+func (u *ui) setChrome() {
+	bg := canvas.NewLinearGradient(colBG, colBGDeep, 0)
+	glow := canvas.NewRadialGradient(withAlpha(colAccent, 0x24), withAlpha(colAccent, 0x00))
+	u.win.SetContent(container.NewStack(bg, container.New(&glowLayout{}, glow), newAmbient(), u.content))
 }
 
 // glowLayout parks the ambient blob top-left, oversized, like desktop's #blob-a.
@@ -167,14 +185,17 @@ func (u *ui) showHome() {
 		center = u.tempView()
 	case "scenes":
 		center = u.scenesView()
+	case "timer":
+		center = u.timerView()
 	default:
 		center = u.dialView()
 	}
 
 	modes := container.NewHBox()
-	for _, m := range []string{"dim", "temp", "scenes"} {
+	for _, m := range []string{"bright", "temp", "scenes", "timer"} {
 		m := m
 		p := newPill(strings.ToUpper(m), func() { u.mode = m; u.showHome() })
+		p.size = 11
 		p.setOn(u.mode == m)
 		modes.Add(p)
 	}
@@ -203,7 +224,7 @@ func (u *ui) showHome() {
 func (u *ui) dialView() fyne.CanvasObject {
 	u.dial = newDial(
 		func(v int) {
-			u.sendPilot(fmt.Sprintf("dim %d%%", v), map[string]interface{}{"dimming": v, "state": true})
+			u.sendPilot(fmt.Sprintf("brightness %d%%", v), map[string]interface{}{"dimming": v, "state": true})
 			u.eng.SetLastState("", v, 0)
 		},
 		func(on bool) {
@@ -242,28 +263,73 @@ func (u *ui) syncState() {
 	}()
 }
 
+// kelvinColor approximates black-body light color for a kelvin value
+// (Tanner Helland fit) — the slider strip and numeral preview real output.
+func kelvinColor(k float64) color.NRGBA {
+	t := k / 100
+	clamp := func(v float64) uint8 {
+		if v < 0 {
+			return 0
+		}
+		if v > 255 {
+			return 255
+		}
+		return uint8(v)
+	}
+	var r, g, b float64
+	if t <= 66 {
+		r = 255
+		g = 99.4708025861*math.Log(t) - 161.1195681661
+	} else {
+		r = 329.698727446 * math.Pow(t-60, -0.1332047592)
+		g = 288.1221695283 * math.Pow(t-60, -0.0755148492)
+	}
+	if t >= 66 {
+		b = 255
+	} else if t <= 19 {
+		b = 0
+	} else {
+		b = 138.5177312231*math.Log(t-10) - 305.0447927307
+	}
+	return color.NRGBA{R: clamp(r), G: clamp(g), B: clamp(b), A: 0xFF}
+}
+
 func (u *ui) tempView() fyne.CanvasObject {
 	val := canvas.NewText("3200", colText)
 	val.TextSize = 38
 	val.TextStyle = fyne.TextStyle{Monospace: true}
 	val.Alignment = fyne.TextAlignCenter
-	unit := canvas.NewText("KELVIN", colDim)
-	unit.TextSize = 9
-	unit.TextStyle = fyne.TextStyle{Monospace: true}
+	unit := monoText("KELVIN", 9, colDim)
 	unit.Alignment = fyne.TextAlignCenter
+
+	// live preview strip: actual kelvin ramp behind the slider
+	strip := canvas.NewRaster(func(w, h int) image.Image {
+		img := image.NewNRGBA(image.Rect(0, 0, w, h))
+		for x := 0; x < w; x++ {
+			c := kelvinColor(2200 + (6500-2200)*float64(x)/float64(w))
+			c.A = 0xCC
+			for y := 0; y < h; y++ {
+				img.SetNRGBA(x, y, c)
+			}
+		}
+		return img
+	})
+
+	setPreview := func(k float64) {
+		val.Text = fmt.Sprintf("%d", int(k))
+		val.Color = kelvinColor(k)
+		val.Refresh()
+	}
 
 	s := widget.NewSlider(2200, 6500)
 	s.Step = 100
+	start := 3200.0
 	if t := u.eng.GetConfig().LastColorTemp; t > 0 {
-		s.SetValue(float64(t))
-		val.Text = fmt.Sprintf("%d", t)
-	} else {
-		s.SetValue(3200)
+		start = float64(t)
 	}
-	s.OnChanged = func(v float64) {
-		val.Text = fmt.Sprintf("%d", int(v))
-		val.Refresh()
-	}
+	s.SetValue(start)
+	setPreview(start)
+	s.OnChanged = setPreview
 	s.OnChangeEnded = func(v float64) {
 		u.sendPilot(fmt.Sprintf("%dK", int(v)), map[string]interface{}{"temp": int(v), "state": true})
 		u.eng.SetLastState("", 0, int(v))
@@ -271,25 +337,99 @@ func (u *ui) tempView() fyne.CanvasObject {
 
 	marks := container.NewGridWithColumns(4)
 	for _, m := range []string{"CANDLE", "WARM", "NEUTRAL", "DAY"} {
-		t := canvas.NewText(m, colDim)
-		t.TextSize = 8
-		t.TextStyle = fyne.TextStyle{Monospace: true}
+		t := monoText(m, 8, colDim)
 		t.Alignment = fyne.TextAlignCenter
 		marks.Add(t)
 	}
-	box := container.NewVBox(val, unit, widget.NewLabel(""), s, marks)
-	return container.NewGridWrap(fyne.NewSize(300, 220), box)
+	box := container.NewVBox(
+		val, unit,
+		widget.NewLabel(""),
+		container.NewGridWrap(fyne.NewSize(300, 8), strip),
+		s, marks,
+	)
+	return container.NewGridWrap(fyne.NewSize(300, 250), box)
+}
+
+func (u *ui) timerView() fyne.CanvasObject {
+	disp := canvas.NewText("–", colText)
+	disp.TextSize = 34
+	disp.TextStyle = fyne.TextStyle{Monospace: true}
+	disp.Alignment = fyne.TextAlignCenter
+	sub := monoText("SLEEP TIMER · TURNS TARGET OFF", 9, colDim)
+	sub.Alignment = fyne.TextAlignCenter
+
+	render := func() {
+		if u.timerEnd.IsZero() {
+			disp.Text = "–"
+		} else {
+			left := time.Until(u.timerEnd)
+			if left < 0 {
+				left = 0
+			}
+			disp.Text = fmt.Sprintf("%d:%02d", int(left.Minutes()), int(left.Seconds())%60)
+		}
+		disp.Refresh()
+	}
+	render()
+	// ticker dies with the view: stops once the user leaves timer mode
+	go func() {
+		for range time.Tick(time.Second) {
+			if u.mode != "timer" {
+				return
+			}
+			fyne.Do(render)
+		}
+	}()
+
+	cancel := newTintPill("CANCEL", colErr, func() {
+		if u.timerT != nil {
+			u.timerT.Stop()
+		}
+		u.timerEnd = time.Time{}
+		u.setStatus("timer cancelled", colDim)
+		render()
+	})
+	start := func(mins int) {
+		if u.timerT != nil {
+			u.timerT.Stop()
+		}
+		ts := u.targets()
+		u.timerEnd = time.Now().Add(time.Duration(mins) * time.Minute)
+		u.timerT = time.AfterFunc(time.Duration(mins)*time.Minute, func() {
+			u.report("sleep off", u.eng.SetPower(ts, false))
+			u.timerEnd = time.Time{}
+		})
+		u.setStatus(fmt.Sprintf("sleep in %dm", mins), colOK)
+		render()
+	}
+
+	presets := container.NewHBox()
+	for _, m := range []int{15, 30, 60, 120} {
+		m := m
+		presets.Add(newPill(fmt.Sprintf("%dM", m), func() { start(m) }))
+	}
+
+	// ponytail: in-app timer only — dies if the app quits, same as desktop.
+	box := container.NewVBox(
+		disp, sub,
+		widget.NewLabel(""),
+		container.NewCenter(presets),
+		container.NewCenter(cancel),
+	)
+	return container.NewGridWrap(fyne.NewSize(320, 240), box)
 }
 
 func (u *ui) scenesView() fyne.CanvasObject {
 	grid := container.NewGridWithColumns(3)
 	for _, sc := range scenes {
 		sc := sc
-		grid.Add(newPill(sc.Name, func() {
+		p := newTintPill(sc.Name, sc.Tint, func() {
 			u.sendPilot(strings.ToLower(sc.Name), map[string]interface{}{"sceneId": sc.ID, "state": true})
-		}))
+		})
+		p.size = 10
+		grid.Add(container.NewPadded(p))
 	}
-	return container.NewGridWrap(fyne.NewSize(300, 260), container.NewVScroll(grid))
+	return container.NewGridWrap(fyne.NewSize(330, 330), grid)
 }
 
 // ── switcher ────────────────────────────────────────────────────────
@@ -309,7 +449,7 @@ func (u *ui) switcher() fyne.CanvasObject {
 		p.setOn(u.sel == key)
 		row.Add(p)
 	}
-	plus := newPill("✚", func() { u.showManage(false) })
+	plus := newTintPill("✚", colAccent, func() { u.showManage(false) })
 	return container.NewBorder(nil, nil, nil, plus, container.NewHScroll(row))
 }
 
@@ -320,7 +460,7 @@ func (u *ui) showManage(autoScan bool) {
 	title.TextSize = 19
 	head := container.NewPadded(container.NewBorder(nil, nil,
 		title,
-		newPill("✕", func() { u.showHome() }),
+		newTintPill("✕ CLOSE", colAccent, func() { u.showHome() }),
 	))
 
 	body := container.NewVBox()
@@ -381,13 +521,12 @@ func deviceTitle(name, meta string) fyne.CanvasObject {
 	return container.NewVBox(n, monoText(meta, 9, colDim))
 }
 
-// confirmPill turns a DELETE pill into a two-tap confirm.
+// confirmPill turns a DELETE pill into a two-tap confirm; red from the start.
 func confirmPill(onConfirm func()) *pill {
 	var del *pill
-	del = newPill("DELETE", func() {
+	del = newTintPill("DELETE", colErr, func() {
 		if del.text != "SURE?" {
 			del.text = "SURE?"
-			del.accent = colErr
 			del.setOn(true)
 			return
 		}
@@ -399,10 +538,18 @@ func confirmPill(onConfirm func()) *pill {
 func (u *ui) buildManageBody(body *fyne.Container) {
 	cfg := u.eng.GetConfig()
 	body.RemoveAll()
+	gap := func(h float32) fyne.CanvasObject {
+		r := canvas.NewRectangle(colTransparent)
+		r.SetMinSize(fyne.NewSize(1, h))
+		return r
+	}
 
 	// discover
 	body.Add(u.sectionLabel("discover"))
-	body.Add(container.NewCenter(newPill("SCAN NETWORK", u.scan)))
+	scanP := newTintPill("SCAN NETWORK", colAccent, u.scan)
+	scanP.size = 13
+	body.Add(container.NewCenter(scanP))
+	body.Add(gap(16))
 
 	// saved devices: rename inline, two-tap delete
 	body.Add(u.sectionLabel("saved devices"))
@@ -420,7 +567,7 @@ func (u *ui) buildManageBody(body *fyne.Container) {
 		rename.onTapped = func() {
 			entry := widget.NewEntry()
 			entry.SetText(d.Name)
-			save := newPill("SAVE", func() {
+			save := newTintPill("SAVE", colOK, func() {
 				nd := d
 				nd.Name = strings.TrimSpace(entry.Text)
 				if nd.Name != "" {
@@ -433,6 +580,7 @@ func (u *ui) buildManageBody(body *fyne.Container) {
 		}
 		body.Add(glassCard(container.NewBorder(nil, nil, nil, container.NewHBox(rename, del), row)))
 	}
+	body.Add(gap(16))
 
 	// groups
 	body.Add(u.sectionLabel("groups"))
@@ -463,7 +611,7 @@ func (u *ui) buildManageBody(body *fyne.Container) {
 		})
 		memberRow.Add(p)
 	}
-	create := newPill("CREATE GROUP", func() {
+	create := newTintPill("CREATE GROUP", colOK, func() {
 		var macs []string
 		for m, on := range members {
 			if on {
@@ -481,6 +629,25 @@ func (u *ui) buildManageBody(body *fyne.Container) {
 		container.NewHScroll(memberRow),
 		container.NewBorder(nil, nil, nil, create),
 	)))
+	body.Add(gap(16))
+
+	// themes — desktop palettes, shared store names
+	body.Add(u.sectionLabel("themes"))
+	cur := paletteFor(cfg.Theme)
+	tgrid := container.NewGridWithColumns(2)
+	for _, p := range palettes {
+		p := p
+		tp := newTintPill(p.Label, p.Accent, func() {
+			u.eng.SetTheme(p.Store)
+			applyPalette(p)
+			u.app.Settings().SetTheme(newLuminaTheme()) // force widget re-theme
+			u.setChrome()
+			u.showManage(false)
+		})
+		tp.setOn(cur.Key == p.Key)
+		tgrid.Add(container.NewPadded(tp))
+	}
+	body.Add(tgrid)
 	body.Refresh()
 }
 
