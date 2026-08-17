@@ -3,110 +3,23 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
-	"os/exec"
-	"runtime"
-	"sort"
 	"strings"
-	"sync"
 	"time"
+
+	"Lumina/core"
 
 	"github.com/shivarchit/Lumina-TUI/pkg/config"
 	"github.com/shivarchit/Lumina-TUI/pkg/wiz"
 	wruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
-// Target addresses one device for a command.
-type Target struct {
-	IP   string `json:"ip"`
-	Port string `json:"port"`
-	Name string `json:"name"`
-	Mac  string `json:"mac"`
-}
-
-// FanoutResult aggregates one command sent to N targets.
-type FanoutResult struct {
-	OK     int      `json:"ok"`
-	Failed []string `json:"failed"`
-	Ms     int64    `json:"ms"`
-	Hint   string   `json:"hint,omitempty"`
-	Healed bool     `json:"healed,omitempty"` // a stale IP was rewritten; frontend must refresh targets
-}
-
-// hintFor maps a low-level send error to an actionable user hint.
-// macOS returns EHOSTUNREACH ("no route to host") for UDP to LAN peers when
-// the app's Local Network permission is denied — the single most common
-// failure after a fresh install.
-func hintFor(err error) string {
-	if err == nil {
-		return ""
-	}
-	msg := err.Error()
-	if strings.Contains(msg, "no route to host") || strings.Contains(msg, "host is down") {
-		return "macOS is blocking Local Network access — System Settings → Privacy & Security → Local Network → enable Lumina Desktop, then relaunch"
-	}
-	return ""
-}
-
-// lnPrompt debounces re-raising the Local Network permission flow.
-type lnPrompt struct {
-	mu        sync.Mutex
-	lastPrime time.Time
-	lastPane  time.Time
-}
-
-// due reports which recovery actions may fire at now: prime every 10s,
-// settings pane every 60s.
-func (p *lnPrompt) due(now time.Time) (prime, pane bool) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	if now.Sub(p.lastPrime) > 10*time.Second {
-		p.lastPrime = now
-		prime = true
-	}
-	if now.Sub(p.lastPane) > 60*time.Second {
-		p.lastPane = now
-		pane = true
-	}
-	return
-}
-
-var localNet lnPrompt
-
-// forceLocalNetworkPrompt re-raises the macOS Local Network permission flow
-// after a blocked send: broadcast traffic re-triggers the system prompt (when
-// macOS is still willing to show it), and the privacy pane opens so the user
-// can flip the toggle by hand. Debounced so a toggle spree doesn't spam.
-func (a *App) forceLocalNetworkPrompt() {
-	prime, pane := localNet.due(time.Now())
-	if prime {
-		go a.refreshSavedIPs()
-	}
-	if pane && runtime.GOOS == "darwin" {
-		go func() {
-			_ = exec.Command("open",
-				"x-apple.systempreferences:com.apple.preference.security?Privacy_LocalNetwork").Run()
-		}()
-	}
-}
-
-// StateResult is a device's live state, or the error fetching it.
-type StateResult struct {
-	Power      bool   `json:"power"`
-	Brightness int    `json:"brightness"`
-	ColorHex   string `json:"colorHex"`
-	Temp       int    `json:"temp"`
-	Ms         int64  `json:"ms"`
-	Err        string `json:"err"`
-	Hint       string `json:"hint,omitempty"`
-}
-
-// App is the Wails-bound backend.
+// App is the Wails-bound backend: a thin shell over core.Core, which holds all
+// engine logic shared with the mobile app. Method names and signatures are the
+// frontend's contract — keep them stable.
 type App struct {
-	ctx context.Context
-	mu  sync.Mutex
-	cfg config.Config
+	ctx  context.Context
+	core *core.Core
 }
 
 func NewApp() *App {
@@ -115,173 +28,32 @@ func NewApp() *App {
 
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
-	cfg, err := config.Load()
-	if err == nil {
-		a.cfg = cfg
-	}
-	if a.cfg.Port == "" {
-		a.cfg.Port = "38899"
-	}
-	// macOS raises the Local Network permission prompt on broadcast traffic,
-	// not on connected unicast UDP (which is silently dropped when denied).
-	// One background discovery primes the prompt on first launch — and heals
-	// saved-device IPs that went stale across DHCP lease changes.
-	go a.refreshSavedIPs()
+	a.core = core.New()
 }
 
-// refreshSavedIPs broadcasts a discovery and rewrites any saved device whose
-// IP changed since it was saved (DHCP reassignment while the app was closed).
-func (a *App) refreshSavedIPs() {
-	devices, err := wiz.DiscoverDevices()
-	if err != nil {
-		return
-	}
-	byMac := map[string]string{}
-	for _, d := range devices {
-		byMac[strings.ToLower(strings.TrimSpace(d.Mac))] = d.IP
-	}
-	a.updateSavedIPs(byMac)
-}
+func (a *App) GetConfig() config.Config      { return a.core.GetConfig() }
+func (a *App) SetTheme(name string)          { a.core.SetTheme(name) }
+func (a *App) Discover() []wiz.Device        { return a.core.Discover() }
+func (a *App) SaveDevice(d config.SavedDevice) error { return a.core.SaveDevice(d) }
+func (a *App) DeleteDevice(mac string)       { a.core.DeleteDevice(mac) }
+func (a *App) SaveGroup(g config.Group) error { return a.core.SaveGroup(g) }
+func (a *App) DeleteGroup(name string)       { a.core.DeleteGroup(name) }
 
-// updateSavedIPs applies mac→ip fixes to saved devices; persists if changed.
-func (a *App) updateSavedIPs(byMac map[string]string) bool {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	changed := false
-	for i := range a.cfg.SavedDevices {
-		ip := byMac[strings.ToLower(strings.TrimSpace(a.cfg.SavedDevices[i].Mac))]
-		if ip != "" && ip != a.cfg.SavedDevices[i].IP {
-			a.cfg.SavedDevices[i].IP = ip
-			changed = true
-		}
-	}
-	if changed {
-		a.persist()
-	}
-	return changed
-}
-
-// GetConfig returns the shared config (same file the TUI uses).
-func (a *App) GetConfig() config.Config {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	return a.cfg
-}
-
-func (a *App) persist() {
-	_ = config.Save(a.cfg)
-}
-
-// SetTheme persists the selected theme name.
-func (a *App) SetTheme(name string) {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	a.cfg.Theme = name
-	a.persist()
-}
-
-// SetLastState persists last color/brightness/temp for boot restore.
 func (a *App) SetLastState(colorHex string, brightness, temp int) {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	if colorHex != "" {
-		a.cfg.LastColor = colorHex
-	}
-	if brightness > 0 {
-		a.cfg.LastBrightness = brightness
-	}
-	if temp > 0 {
-		a.cfg.LastColorTemp = temp
-	}
-	a.persist()
+	a.core.SetLastState(colorHex, brightness, temp)
 }
 
-// SetPilot sends a setPilot command to every target concurrently.
-func (a *App) SetPilot(targets []Target, params map[string]interface{}) FanoutResult {
-	return a.fanout(targets, "setPilot", params)
+func (a *App) SetPilot(targets []core.Target, params map[string]interface{}) core.FanoutResult {
+	return a.core.SetPilot(targets, params)
 }
 
-// SetPower sends a setState command to every target concurrently.
-func (a *App) SetPower(targets []Target, on bool) FanoutResult {
-	return a.fanout(targets, "setState", map[string]interface{}{"state": on})
+func (a *App) SetPower(targets []core.Target, on bool) core.FanoutResult {
+	return a.core.SetPower(targets, on)
 }
 
-// healGate debounces per-MAC re-discovery: a dial drag on an offline bulb
-// fires debounced sends every ~140ms, and each would otherwise block 3s in a
-// discovery broadcast.
-var healGate = struct {
-	mu   sync.Mutex
-	last map[string]time.Time
-}{last: map[string]time.Time{}}
+func (a *App) GetState(ip, port string) core.StateResult { return a.core.GetState(ip, port) }
 
-func healDue(mac string) bool {
-	healGate.mu.Lock()
-	defer healGate.mu.Unlock()
-	if time.Since(healGate.last[mac]) < 10*time.Second {
-		return false
-	}
-	healGate.last[mac] = time.Now()
-	return true
-}
-
-// send delivers one command; on an unreachable-class error (stale DHCP lease
-// looks identical to a permission denial: "no route to host") it re-resolves
-// the device's current IP by MAC, heals the config, and retries once.
-func (a *App) send(t Target, method string, params map[string]interface{}) (healed bool, err error) {
-	err = wiz.SendCommand(t.IP, t.Port, method, params)
-	if err == nil || t.Mac == "" || hintFor(err) == "" || !healDue(t.Mac) {
-		return false, err
-	}
-	// ponytail: blocks this send up to 3s; per-MAC 10s gate keeps it rare.
-	// A true permission denial pays it too — indistinguishable from IP drift.
-	d, derr := wiz.DiscoverDeviceByMAC(t.Mac, t.Port, 3*time.Second)
-	if derr != nil || d.IP == "" || d.IP == t.IP {
-		return false, err
-	}
-	a.updateSavedIPs(map[string]string{strings.ToLower(strings.TrimSpace(t.Mac)): d.IP})
-	return true, wiz.SendCommand(d.IP, t.Port, method, params)
-}
-
-func (a *App) fanout(targets []Target, method string, params map[string]interface{}) FanoutResult {
-	start := time.Now()
-	type result struct {
-		idx    int
-		healed bool
-		err    error
-	}
-	results := make(chan result, len(targets))
-	for i, t := range targets {
-		go func(i int, t Target) {
-			healed, err := a.send(t, method, params)
-			results <- result{i, healed, err}
-		}(i, t)
-	}
-	res := FanoutResult{Failed: []string{}}
-	for range targets {
-		r := <-results
-		if r.healed {
-			res.Healed = true
-		}
-		if r.err != nil {
-			name := targets[r.idx].Name
-			if name == "" {
-				name = targets[r.idx].IP
-			}
-			res.Failed = append(res.Failed, name)
-			if res.Hint == "" {
-				res.Hint = hintFor(r.err)
-			}
-		} else {
-			res.OK++
-		}
-	}
-	sort.Strings(res.Failed)
-	if res.Hint != "" {
-		a.forceLocalNetworkPrompt()
-	}
-	res.Ms = time.Since(start).Milliseconds()
-	return res
-}
+func (a *App) GroupTargets(name string) []core.Target { return a.core.GroupTargets(name) }
 
 // appVersion is stamped by release builds via -ldflags "-X main.appVersion=vX.Y.Z".
 var appVersion = "dev"
@@ -313,137 +85,4 @@ func (a *App) CheckUpdate() string {
 // OpenReleases opens the GitHub releases page in the default browser.
 func (a *App) OpenReleases() {
 	wruntime.BrowserOpenURL(a.ctx, "https://github.com/shivarchit/Lumina/releases/latest")
-}
-
-// GetState fetches live state from one device.
-func (a *App) GetState(ip, port string) StateResult {
-	start := time.Now()
-	st, err := wiz.GetPilotState(ip, port)
-	out := StateResult{Ms: time.Since(start).Milliseconds()}
-	if err != nil {
-		out.Err = err.Error()
-		out.Hint = hintFor(err)
-		return out
-	}
-	out.Power = st.Power
-	out.Brightness = st.Brightness
-	out.ColorHex = st.ColorHex
-	out.Temp = st.Temp
-	return out
-}
-
-// Discover scans the local network for WiZ devices.
-func (a *App) Discover() []wiz.Device {
-	devices, err := wiz.DiscoverDevices()
-	if err != nil {
-		return []wiz.Device{}
-	}
-	return devices
-}
-
-// SaveDevice upserts a saved device keyed by MAC and persists.
-func (a *App) SaveDevice(d config.SavedDevice) error {
-	mac := strings.ToLower(strings.TrimSpace(d.Mac))
-	if mac == "" {
-		return fmt.Errorf("cannot save device without MAC")
-	}
-	d.Mac = mac
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	for i := range a.cfg.SavedDevices {
-		if strings.ToLower(strings.TrimSpace(a.cfg.SavedDevices[i].Mac)) == mac {
-			a.cfg.SavedDevices[i] = d
-			a.persist()
-			return nil
-		}
-	}
-	a.cfg.SavedDevices = append(a.cfg.SavedDevices, d)
-	a.persist()
-	return nil
-}
-
-// DeleteDevice removes a saved device by MAC and from any groups.
-func (a *App) DeleteDevice(mac string) {
-	mac = strings.ToLower(strings.TrimSpace(mac))
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	kept := a.cfg.SavedDevices[:0]
-	for _, d := range a.cfg.SavedDevices {
-		if strings.ToLower(strings.TrimSpace(d.Mac)) != mac {
-			kept = append(kept, d)
-		}
-	}
-	a.cfg.SavedDevices = kept
-	for gi := range a.cfg.Groups {
-		macs := a.cfg.Groups[gi].Macs[:0]
-		for _, m := range a.cfg.Groups[gi].Macs {
-			if strings.ToLower(strings.TrimSpace(m)) != mac {
-				macs = append(macs, m)
-			}
-		}
-		a.cfg.Groups[gi].Macs = macs
-	}
-	a.persist()
-}
-
-// SaveGroup creates or replaces a group by name.
-func (a *App) SaveGroup(g config.Group) error {
-	g.Name = strings.TrimSpace(g.Name)
-	if g.Name == "" {
-		return fmt.Errorf("group name cannot be empty")
-	}
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	for i := range a.cfg.Groups {
-		if a.cfg.Groups[i].Name == g.Name {
-			a.cfg.Groups[i] = g
-			a.persist()
-			return nil
-		}
-	}
-	a.cfg.Groups = append(a.cfg.Groups, g)
-	a.persist()
-	return nil
-}
-
-// DeleteGroup removes a group by name.
-func (a *App) DeleteGroup(name string) {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	kept := a.cfg.Groups[:0]
-	for _, g := range a.cfg.Groups {
-		if g.Name != name {
-			kept = append(kept, g)
-		}
-	}
-	a.cfg.Groups = kept
-	a.persist()
-}
-
-// GroupTargets resolves a group's MACs to targets via saved devices.
-func (a *App) GroupTargets(name string) []Target {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	byMac := map[string]config.SavedDevice{}
-	for _, d := range a.cfg.SavedDevices {
-		byMac[strings.ToLower(strings.TrimSpace(d.Mac))] = d
-	}
-	var targets []Target
-	for _, g := range a.cfg.Groups {
-		if g.Name != name {
-			continue
-		}
-		for _, mac := range g.Macs {
-			d, ok := byMac[strings.ToLower(strings.TrimSpace(mac))]
-			if !ok || d.IP == "" {
-				continue
-			}
-			port := d.Port
-			if port == "" {
-				port = a.cfg.Port
-			}
-			targets = append(targets, Target{IP: d.IP, Port: port, Name: d.Name, Mac: d.Mac})
-		}
-	}
-	return targets
 }

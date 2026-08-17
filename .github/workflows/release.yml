@@ -110,9 +110,46 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+  build-android:
+    name: Build android-apk
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: mobile/go.mod
+
+      - name: Install Fyne CLI
+        run: go install fyne.io/tools/cmd/fyne@latest
+
+      - name: Build APK
+        run: |
+          export ANDROID_NDK_HOME="$ANDROID_NDK_LATEST_HOME"
+          cd mobile
+          fyne package -os android
+          mkdir -p ../dist
+          cp Lumina.apk ../dist/Lumina-android.apk
+
+      - name: Compute SHA256
+        run: |
+          cd dist
+          sha256sum * > SHA256SUMS-android.txt
+          cat SHA256SUMS-android.txt
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: lumina-android
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 7
+
   release:
     name: Publish GitHub Release
-    needs: build
+    needs: [build, build-android]
     runs-on: ubuntu-latest
     steps:
       - name: Download all artifacts

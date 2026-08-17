@@ -36,6 +36,28 @@ jobs:
       - name: Build app
         run: wails build
 
+  build-android:
+    name: Build (Android)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: mobile/go.mod
+
+      - name: Install Fyne CLI
+        run: go install fyne.io/tools/cmd/fyne@latest
+
+      - name: Build APK
+        run: |
+          export ANDROID_NDK_HOME="$ANDROID_NDK_LATEST_HOME"
+          cd mobile
+          fyne package -os android
+
   build-linux:
     name: Build (Linux)
     runs-on: ubuntu-latest

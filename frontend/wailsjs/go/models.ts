@@ -84,7 +84,7 @@ export namespace config {
 
 }
 
-export namespace main {
+export namespace core {
 	
 	export class FanoutResult {
 	    ok: number;
