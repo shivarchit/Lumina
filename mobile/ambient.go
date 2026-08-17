@@ -48,6 +48,16 @@ var glowAlpha = func() []uint8 {
 	return a
 }()
 
+// inkWell is a soft dark radial placed behind the hero text so it stays
+// readable over a bright glow; same falloff as the glow, tinted black.
+var inkWell = func() image.Image {
+	img := image.NewNRGBA(image.Rect(0, 0, glowTex, glowTex))
+	for i, al := range glowAlpha {
+		img.Pix[i*4+3] = uint8(float64(al) * 0.55)
+	}
+	return img
+}()
+
 // bakeGlow tints the precomputed falloff — cheap enough for per-drag recolor.
 func bakeGlow(col color.NRGBA) image.Image {
 	img := image.NewNRGBA(image.Rect(0, 0, glowTex, glowTex))

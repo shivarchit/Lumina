@@ -386,7 +386,11 @@ func (u *ui) showHome() {
 		}
 	}()
 
+	// soft dark radial behind the text keeps it readable over a bright glow
+	ink := canvas.NewImageFromImage(inkWell)
+	ink.ScaleMode = canvas.ImageScaleFastest
 	center := container.NewStack(field,
+		container.NewCenter(container.NewGridWrap(fyne.NewSize(360, 320), ink)),
 		container.NewCenter(container.NewVBox(numRow, u.descTxt, gap(4), hint, gap(8),
 			container.NewCenter(u.pwWord), gap(2), timerTxt)))
 
