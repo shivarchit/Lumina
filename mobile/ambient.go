@@ -31,23 +31,32 @@ type aura struct {
 	on    bool
 }
 
-// bake renders the radial falloff (core + corona in one texture) for col.
-func bakeGlow(col color.NRGBA) image.Image {
-	img := image.NewNRGBA(image.Rect(0, 0, glowTex, glowTex))
+// glowAlpha is the color-independent radial falloff, computed once: a bright
+// core easing into a wide soft corona; (1-d²)ⁿ keeps the tail smooth so the
+// texture edge never reads as a boundary.
+var glowAlpha = func() []uint8 {
+	a := make([]uint8, glowTex*glowTex)
 	c := float64(glowTex) / 2
 	for y := 0; y < glowTex; y++ {
 		for x := 0; x < glowTex; x++ {
 			d := math.Hypot(float64(x)-c, float64(y)-c) / c // 0 center → 1 edge
-			if d >= 1 {
-				continue
+			if d < 1 {
+				a[y*glowTex+x] = uint8(math.Pow(1-d*d, 2.6) * 0.9 * 255)
 			}
-			// bright core easing into a wide soft corona; (1-d²)ⁿ keeps the
-			// tail smooth so the texture edge never reads as a boundary
-			a := math.Pow(1-d*d, 2.6) * 0.9
-			p := col
-			p.A = uint8(a * 255)
-			img.SetNRGBA(x, y, p)
 		}
+	}
+	return a
+}()
+
+// bakeGlow tints the precomputed falloff — cheap enough for per-drag recolor.
+func bakeGlow(col color.NRGBA) image.Image {
+	img := image.NewNRGBA(image.Rect(0, 0, glowTex, glowTex))
+	for i, al := range glowAlpha {
+		if al == 0 {
+			continue
+		}
+		p := i * 4
+		img.Pix[p], img.Pix[p+1], img.Pix[p+2], img.Pix[p+3] = col.R, col.G, col.B, al
 	}
 	return img
 }

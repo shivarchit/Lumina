@@ -359,8 +359,8 @@ func (u *ui) showHome() {
 	timerTxt.Alignment = fyne.TextAlignCenter
 	renderTimer := func() {
 		timerTxt.Text = ""
-		if !u.timerEnd.IsZero() {
-			timerTxt.Text = "SLEEP · " + countdown(u.timerEnd)
+		if s := u.countdownStr(); s != "" {
+			timerTxt.Text = "SLEEP · " + s
 		}
 		timerTxt.Refresh()
 		if u.timerTick != nil {
@@ -377,10 +377,7 @@ func (u *ui) showHome() {
 			if u.viewGen != gen {
 				return
 			}
-			s := ""
-			if !u.timerEnd.IsZero() {
-				s = countdown(u.timerEnd)
-			}
+			s := u.countdownStr()
 			if s == last {
 				continue // idle: zero UI work; one last pass clears cancel/fire
 			}
@@ -552,7 +549,7 @@ func (u *ui) lightSheet() fyne.CanvasObject {
 		dot(canvas.NewCircle(c), func() { u.paintRGB(c) })
 	}
 	// last dot: hue wheel — toggles the full-spectrum slider
-	wheel := canvas.NewImageFromImage(bakeHueDot())
+	wheel := canvas.NewImageFromImage(hueDot)
 	wheel.ScaleMode = canvas.ImageScaleFastest
 	dot(wheel, func() {
 		u.huePick = !u.huePick
@@ -579,7 +576,7 @@ func (u *ui) paintRGB(c color.NRGBA) {
 
 // hueColor maps 0..360 to the full-saturation RGB spectrum.
 func hueColor(h float64) color.NRGBA {
-	h = math.Mod(math.Mod(h, 360)+360, 360) / 60
+	h = math.Mod(h, 360) / 60
 	f := h - math.Floor(h)
 	var r, g, b float64
 	switch int(h) {
@@ -599,8 +596,8 @@ func hueColor(h float64) color.NRGBA {
 	return color.NRGBA{R: uint8(r * 255), G: uint8(g * 255), B: uint8(b * 255), A: 0xFF}
 }
 
-// bakeHueDot renders the little color wheel that opens the hue slider.
-func bakeHueDot() image.Image {
+// hueDot is the little color wheel that opens the hue slider, baked once.
+var hueDot = func() image.Image {
 	const n, r = 64, 30.0
 	img := image.NewNRGBA(image.Rect(0, 0, n, n))
 	for y := 0; y < n; y++ {
@@ -613,7 +610,7 @@ func bakeHueDot() image.Image {
 		}
 	}
 	return img
-}
+}()
 
 // scenes: tinted words, tap = the room becomes it
 func (u *ui) scenesSheet() fyne.CanvasObject {
@@ -631,9 +628,12 @@ func (u *ui) scenesSheet() fyne.CanvasObject {
 	return container.NewVBox(sheetLabel("scenes"), grid, gap(4))
 }
 
-// countdown formats time left until end as M:SS, clamped at zero.
-func countdown(end time.Time) string {
-	left := time.Until(end)
+// countdownStr is the live timer as M:SS, or "" when no timer is armed.
+func (u *ui) countdownStr() string {
+	if u.timerEnd.IsZero() {
+		return ""
+	}
+	left := time.Until(u.timerEnd)
 	if left < 0 {
 		left = 0
 	}
@@ -648,10 +648,9 @@ func (u *ui) timerSheet() fyne.CanvasObject {
 	sub.Alignment = fyne.TextAlignCenter
 
 	render := func() {
-		if u.timerEnd.IsZero() {
-			disp.Text = "–"
-		} else {
-			disp.Text = countdown(u.timerEnd)
+		disp.Text = "–"
+		if s := u.countdownStr(); s != "" {
+			disp.Text = s
 		}
 		disp.Refresh()
 	}
