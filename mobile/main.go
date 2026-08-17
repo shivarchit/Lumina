@@ -667,7 +667,12 @@ func (u *ui) timerSheet() fyne.CanvasObject {
 		u.timerEnd = time.Now().Add(dur)
 		u.timerT = time.AfterFunc(dur, func() {
 			u.report("sleep off", u.eng.SetPower(ts, false))
-			u.timerEnd = time.Time{}
+			fyne.Do(func() { // hero must reflect the off state, not just the bulb
+				u.timerEnd = time.Time{}
+				u.power = false
+				u.showPower()
+				u.refreshAura()
+			})
 		})
 		render() // countdown itself is the feedback — no status line
 	}
