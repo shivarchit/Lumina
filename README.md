@@ -2,11 +2,11 @@
 
 # Lumina
 
-**A desktop app for WiZ smart lights.** One oversized dial, frosted glass, and light blobs that mirror what your bulbs are actually doing. Click the ring, the room changes — the lamp is the interface.
+**A desktop and Android app for WiZ smart lights.** One oversized dial, frosted glass, and light blobs that mirror what your bulbs are actually doing. Click the ring, the room changes — the lamp is the interface.
 
 [![CI](https://github.com/shivarchit/Lumina/actions/workflows/ci.yml/badge.svg)](https://github.com/shivarchit/Lumina/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/shivarchit/Lumina)](https://github.com/shivarchit/Lumina/releases/latest)
-[![Platforms](https://img.shields.io/badge/platforms-macOS%20%C2%B7%20Windows%20%C2%B7%20Linux-8A2BE2)](docs/install.md)
+[![Platforms](https://img.shields.io/badge/platforms-macOS%20%C2%B7%20Windows%20%C2%B7%20Linux%20%C2%B7%20Android-8A2BE2)](docs/install.md)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](#license)
 
 Built on the [Lumina-TUI](https://github.com/shivarchit/Lumina-TUI) engine — one engine, two faces.
@@ -93,6 +93,26 @@ Eight moods — ☾ Night, ⛅ Dusk, Macchiato, Frappé, Dracula, Gruvbox, Indig
 |---------|--------|--------|
 | ![Night](docs/screenshots/night.png) | ![Dusk](docs/screenshots/dusk.png) | ![Themes](docs/screenshots/themes.png) |
 
+## Mobile — Aura (Android)
+
+The phone app drops the dial entirely: **the screen is the bulb**. A full-screen glow renders your light's live color and brightness, drifting embers rise with it, and dragging anywhere up or down dims the room. Every control lives in a bottom sheet of plain words — no buttons, no chrome.
+
+| Light | Scenes | Timer |
+|-------|--------|-------|
+| ![Light](docs/screenshots/mobile/light.png) | ![Scenes](docs/screenshots/mobile/scenes.png) | ![Timer](docs/screenshots/mobile/timer.png) |
+
+| Themes | Manage |
+|--------|--------|
+| ![Themes](docs/screenshots/mobile/themes.png) | ![Manage](docs/screenshots/mobile/manage.png) |
+
+- **Light** — kelvin gradient slider, preset dots, and a hue wheel that opens a full-spectrum picker
+- **Scenes** — the twelve WiZ presets as color-tinted words
+- **Timer** — sleep presets or custom minutes; the countdown lives on the hero so it's visible from any tab
+- **Themes** — the same eight moods as desktop, sharing one config value
+- **Manage** — discover, rename, delete, and group devices; hardware back returns home
+
+Grab `Lumina-android.apk` from the [latest release](https://github.com/shivarchit/Lumina/releases/latest) and sideload it. Same `~/.lumina-config.json` engine underneath — devices and themes carry over conceptually, stored in app storage on Android.
+
 ## Easter eggs
 
 The dial knows certain numbers, and it's not just the dial. That's all the hint you get.
@@ -101,8 +121,10 @@ The dial knows certain numbers, and it's not just the dial. That's all the hint 
 
 The WiZ protocol, discovery, and config layers live in [`Lumina-TUI/pkg`](https://github.com/shivarchit/Lumina-TUI/tree/master/pkg) and are imported as a Go dependency — engine fixes land there and reach this app with a version bump.
 
-- `app.go` — Wails bindings: state fetch, fan-out control, discovery, device/group CRUD
+- `core/` — platform-neutral engine shared by both apps: targets, fan-out, state sync, config
+- `app.go` — Wails bindings, a thin shell over `core/`
 - `frontend/` — vanilla JS + CSS, no framework; `src/main.js` and `src/style.css` are the whole UI
+- `mobile/` — the Fyne Android app (separate Go module, so desktop CI never compiles it)
 - `build/gen_icon.go` — stdlib generator for the Three Lights app icon
 
 Everything persists in `~/.lumina-config.json`, shared with the TUI: devices, groups, theme, last state.
@@ -117,7 +139,13 @@ wails build    # production build → build/bin/Lumina Desktop.app
 go test ./...  # backend tests
 ```
 
-Releases are automated: pushing a `v*` tag builds macOS (universal), Windows (amd64), and Linux (amd64/arm64) artifacts and publishes them with a combined `SHA256SUMS.txt`.
+Releases are automated: pushing a `v*` tag builds macOS (universal), Windows (amd64), Linux (amd64/arm64), and an Android APK, and publishes them with a combined `SHA256SUMS.txt`.
+
+The Android app builds with the [Fyne CLI](https://docs.fyne.io/started/) and the Android NDK:
+
+```bash
+cd mobile && fyne package -os android   # → mobile/Lumina.apk
+```
 
 ## Related
 
