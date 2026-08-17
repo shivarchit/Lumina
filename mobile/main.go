@@ -727,7 +727,6 @@ func (u *ui) themesSheet() fyne.CanvasObject {
 			u.app.Settings().SetTheme(newLuminaTheme())
 			// repaint the chrome that captured the old palette
 			u.dim.FillColor = scrimCol()
-			u.aura.refade()
 			u.showHome()
 		}))
 	}
