@@ -109,11 +109,32 @@ fade out while two soft light pools in your bulbs' current color roam the
 window — the app becomes a lamp, not a screen. Any input brings everything
 back within 600ms. Disabled when your OS asks for reduced motion.
 
+## Mobile — Aura (Android)
+
+The phone app has no dial — the screen itself is the bulb. A full-screen glow
+renders the light's live color and brightness, and drifting embers rise with it.
+
+| Themes | Manage |
+|--------|--------|
+| ![Themes](screenshots/mobile/themes.png) | ![Manage](screenshots/mobile/manage.png) |
+
+- **Dim** — drag anywhere on the glow, up or down; the numeral follows
+- **Light** — kelvin gradient slider, preset dots, and a hue wheel that opens a
+  full-spectrum color slider
+- **Scenes** — the twelve WiZ presets as color-tinted words
+- **Timer** — sleep presets or custom minutes; the countdown shows on the hero
+  from any tab, and the light (and hero) switch off when it fires
+- **Themes** — the same eight moods as desktop, one shared config value
+- **Manage** — scan the network, rename, delete, and group devices; the
+  hardware back button returns home
+- Multiple devices/groups: dots appear under the name, tap the name to cycle
+
 ## Shared config
 
 Everything is stored in `~/.lumina-config.json`, the same file
 [Lumina-TUI](https://github.com/shivarchit/Lumina-TUI) reads and writes:
-devices, groups, theme, and last color/brightness/temperature.
+devices, groups, theme, and last color/brightness/temperature. On Android the
+same format lives in app storage.
 
 ## And…
 

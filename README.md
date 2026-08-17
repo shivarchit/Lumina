@@ -2,14 +2,14 @@
 
 # Lumina
 
-**A desktop and Android app for WiZ smart lights.** One oversized dial, frosted glass, and light blobs that mirror what your bulbs are actually doing. Click the ring, the room changes — the lamp is the interface.
+**A desktop and Android app for WiZ smart lights.** The lamp is the interface — a glowing dial on desktop, a full-screen aura on mobile, both mirroring what your bulbs are actually doing.
 
 [![CI](https://github.com/shivarchit/Lumina/actions/workflows/ci.yml/badge.svg)](https://github.com/shivarchit/Lumina/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/shivarchit/Lumina)](https://github.com/shivarchit/Lumina/releases/latest)
 [![Platforms](https://img.shields.io/badge/platforms-macOS%20%C2%B7%20Windows%20%C2%B7%20Linux%20%C2%B7%20Android-8A2BE2)](docs/install.md)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](#license)
 
-Built on the [Lumina-TUI](https://github.com/shivarchit/Lumina-TUI) engine — one engine, two faces.
+Built on the [Lumina-TUI](https://github.com/shivarchit/Lumina-TUI) engine — one engine, three faces.
 
 ![Lumina Desktop — Night mode](docs/screenshots/night.png)
 
@@ -29,123 +29,56 @@ curl -fsSL https://raw.githubusercontent.com/shivarchit/Lumina/master/install.sh
 irm https://raw.githubusercontent.com/shivarchit/Lumina/master/install.ps1 | iex
 ```
 
-Or grab the installer, portable zip, or tarball from the [latest release](https://github.com/shivarchit/Lumina/releases/latest).
+**Android**: sideload `Lumina-android.apk` from the [latest release](https://github.com/shivarchit/Lumina/releases/latest) — where every desktop installer, zip, and tarball lives too.
 
-On first run, **allow Local Network access** when macOS asks — the app talks to your bulbs directly over LAN UDP, no cloud. If toggles report *failed*, see [troubleshooting](docs/troubleshooting.md).
+On first run, **allow Local Network access** when macOS asks — the app talks to your bulbs directly over LAN UDP, no cloud. Toggles reporting *failed*? See [troubleshooting](docs/troubleshooting.md).
 
-## Documentation
+## Desktop
 
-| Guide | What's inside |
-|-------|---------------|
-| [Usage](docs/usage.md) | Every control in detail — dial, keyboard, scenes, timer, groups, idle mode |
-| [Themes](docs/themes.md) | The eight moods and how they sync with the TUI |
-| [Install](docs/install.md) | Per-OS install, checksum verification, config location |
-| [Build from source](docs/build.md) | Prerequisites per OS, dev loop, release automation |
-| [Troubleshooting](docs/troubleshooting.md) | Failed toggles, offline devices, discovery, macOS permission quirks |
-
-## The dial
-
-Click anywhere on the arc or drag; scroll to nudge; arrow keys for precision (`⇧` for ±10, `Space` toggles power). Dots mark 25/50/75 and clicks near them snap; the knob rides the arc tip. An off bulb wakes at the clicked brightness.
-
-## Panels
-
-Each panel takes the dial's place — progressive disclosure, `← Back`/`Esc` returns.
+One oversized dial: click the arc, scroll to nudge, `Space` toggles power. Panels for temperature, color, and twelve WiZ scenes take the dial's place as needed. Leave it idle and the UI recedes into a lightpainting in your bulbs' current color.
 
 | Temperature | Color | Scenes |
 |-------------|-------|--------|
 | ![Temp](docs/screenshots/temp.png) | ![Color](docs/screenshots/color.png) | ![Scenes](docs/screenshots/scenes.png) |
 
-- **Temperature** — 2200K–6500K rail with warm / day / cool landmarks
-- **Color** — hue ring plus recent and preset hexes
-- **Scenes** — twelve WiZ presets with color-preview pills. While one plays, the Scenes pill morphs into a live indicator with an ✕ to stop it, visible from every screen:
+Live per-bulb status chips, discovery, groups with concurrent fan-out, sleep timer, and eight themes — every control detailed in [usage](docs/usage.md).
 
-<div align="center">
+## Mobile — Aura
 
-![Scene playing](docs/screenshots/scene-playing.png)
-
-</div>
-
-## Live status
-
-One chip per bulb: **green** on · **red** off · **hollow** unreachable. Chips update the instant a command lands and re-sync from the bulbs every 10 seconds — changes from the phone app or TUI show up here too.
-
-## Devices, groups, timer
-
-| Discover | Groups | Timer |
-|----------|--------|-------|
-| ![Discover](docs/screenshots/discover.png) | ![Groups](docs/screenshots/groups.png) | ![Timer](docs/screenshots/timer.png) |
-
-- **Discover** — UDP broadcast scan; bulbs stream in as cards, save/rename inline, offline saved devices stay editable
-- **Groups** — tick members, target the group, commands fan out concurrently; deleting asks twice
-- **Sleep timer** — presets or custom minutes, countdown with absolute end time
-
-## Idle
-
-Leave it alone for 45 seconds and the UI recedes — two light pools in your bulbs' current color roam the window. The app becomes a lamp, not a screen. Any input wakes it in 600ms.
-
-![Idle lightpainting](docs/screenshots/idle-lightpainting.png)
-
-## Themes
-
-Eight moods — ☾ Night, ⛅ Dusk, Macchiato, Frappé, Dracula, Gruvbox, Indigo, Ember — shared with the TUI where names overlap. See [themes](docs/themes.md).
-
-| ☾ Night | ⛅ Dusk | Picker |
-|---------|--------|--------|
-| ![Night](docs/screenshots/night.png) | ![Dusk](docs/screenshots/dusk.png) | ![Themes](docs/screenshots/themes.png) |
-
-## Mobile — Aura (Android)
-
-The phone app drops the dial entirely: **the screen is the bulb**. A full-screen glow renders your light's live color and brightness, drifting embers rise with it, and dragging anywhere up or down dims the room. Every control lives in a bottom sheet of plain words — no buttons, no chrome.
+The phone app drops the dial: **the screen is the bulb**. A full-screen glow renders your light's live color and brightness, drag anywhere to dim, and every control is a word in the bottom sheet — kelvin slider, preset dots, a full-spectrum hue wheel, scenes, sleep timer with a hero countdown, themes, and device management.
 
 | Light | Scenes | Timer |
 |-------|--------|-------|
 | ![Light](docs/screenshots/mobile/light.png) | ![Scenes](docs/screenshots/mobile/scenes.png) | ![Timer](docs/screenshots/mobile/timer.png) |
 
-| Themes | Manage |
-|--------|--------|
-| ![Themes](docs/screenshots/mobile/themes.png) | ![Manage](docs/screenshots/mobile/manage.png) |
+## Documentation
 
-- **Light** — kelvin gradient slider, preset dots, and a hue wheel that opens a full-spectrum picker
-- **Scenes** — the twelve WiZ presets as color-tinted words
-- **Timer** — sleep presets or custom minutes; the countdown lives on the hero so it's visible from any tab
-- **Themes** — the same eight moods as desktop, sharing one config value
-- **Manage** — discover, rename, delete, and group devices; hardware back returns home
-
-Grab `Lumina-android.apk` from the [latest release](https://github.com/shivarchit/Lumina/releases/latest) and sideload it. Same `~/.lumina-config.json` engine underneath — devices and themes carry over conceptually, stored in app storage on Android.
-
-## Easter eggs
-
-The dial knows certain numbers, and it's not just the dial. That's all the hint you get.
+| Guide | What's inside |
+|-------|---------------|
+| [Usage](docs/usage.md) | Every desktop control — dial, keyboard, scenes, timer, groups, idle mode |
+| [Themes](docs/themes.md) | The eight moods and how they sync across desktop, mobile, and TUI |
+| [Install](docs/install.md) | Per-OS install, checksum verification, config location |
+| [Build from source](docs/build.md) | Prerequisites, dev loop, release automation |
+| [Troubleshooting](docs/troubleshooting.md) | Failed toggles, offline devices, discovery, macOS permission quirks |
 
 ## Architecture
 
-The WiZ protocol, discovery, and config layers live in [`Lumina-TUI/pkg`](https://github.com/shivarchit/Lumina-TUI/tree/master/pkg) and are imported as a Go dependency — engine fixes land there and reach this app with a version bump.
+The WiZ protocol, discovery, and config layers live in [`Lumina-TUI/pkg`](https://github.com/shivarchit/Lumina-TUI/tree/master/pkg); a shared `core/` package turns them into one engine consumed by both apps. Everything persists in `~/.lumina-config.json`, shared with the TUI.
 
-- `core/` — platform-neutral engine shared by both apps: targets, fan-out, state sync, config
-- `app.go` — Wails bindings, a thin shell over `core/`
-- `frontend/` — vanilla JS + CSS, no framework; `src/main.js` and `src/style.css` are the whole UI
-- `mobile/` — the Fyne Android app (separate Go module, so desktop CI never compiles it)
-- `build/gen_icon.go` — stdlib generator for the Three Lights app icon
-
-Everything persists in `~/.lumina-config.json`, shared with the TUI: devices, groups, theme, last state.
+- `core/` — platform-neutral engine: targets, fan-out, state sync, config
+- `app.go` + `frontend/` — Wails desktop, vanilla JS/CSS
+- `mobile/` — Fyne Android app (separate Go module)
 
 ## Development
 
-Requires Go 1.25+, Node 18+, and the [Wails CLI](https://wails.io/docs/gettingstarted/installation) — see [docs/build.md](docs/build.md) for per-OS setup:
-
 ```bash
-wails dev      # live-reload development
-wails build    # production build → build/bin/Lumina Desktop.app
-go test ./...  # backend tests
+wails dev                             # desktop live-reload
+wails build                           # desktop production build
+cd mobile && fyne package -os android # Android APK (needs NDK)
+go test ./...                         # backend tests
 ```
 
-Releases are automated: pushing a `v*` tag builds macOS (universal), Windows (amd64), Linux (amd64/arm64), and an Android APK, and publishes them with a combined `SHA256SUMS.txt`.
-
-The Android app builds with the [Fyne CLI](https://docs.fyne.io/started/) and the Android NDK:
-
-```bash
-cd mobile && fyne package -os android   # → mobile/Lumina.apk
-```
+Prereqs and per-OS setup in [docs/build.md](docs/build.md). Pushing a `v*` tag builds macOS, Windows, Linux, and Android artifacts and publishes a release with `SHA256SUMS.txt`.
 
 ## Related
 
