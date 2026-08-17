@@ -4,7 +4,7 @@
 	android:versionCode="10"
 	android:versionName="0.1.0">
 
-	<application android:label="Lumina" android:debuggable="true">
+	<application android:label="Lumina">
 	<activity android:name="org.golang.app.GoNativeActivity"
 		android:label="Lumina"
 		android:screenOrientation="portrait"

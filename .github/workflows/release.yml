@@ -129,7 +129,8 @@ jobs:
         run: |
           export ANDROID_NDK_HOME="$ANDROID_NDK_LATEST_HOME"
           cd mobile
-          fyne package -os android
+          # arm64-only: every phone since 2017; an all-ABI APK is ~4x the size
+          fyne package -os android/arm64
           mkdir -p ../dist
           cp Lumina.apk ../dist/Lumina-android.apk
 

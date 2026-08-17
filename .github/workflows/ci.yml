@@ -56,7 +56,7 @@ jobs:
         run: |
           export ANDROID_NDK_HOME="$ANDROID_NDK_LATEST_HOME"
           cd mobile
-          fyne package -os android
+          fyne package -os android/arm64
 
   build-linux:
     name: Build (Linux)
