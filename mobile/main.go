@@ -5,10 +5,11 @@ package main
 
 import (
 	"fmt"
+	"image"
 	"image/color"
+	"math"
 	"os"
 	"runtime"
-	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -17,6 +18,7 @@ import (
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
+	fynemobile "fyne.io/fyne/v2/driver/mobile"
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/widget"
 
@@ -52,18 +54,21 @@ type ui struct {
 	win fyne.Window
 
 	sel        string // device MAC or "g:"+group name
-	tab        string // light | scenes | timer | more
+	tab        string // light | scenes | timer | themes
+	huePick    bool   // light tab: full-spectrum slider open
 	bright     float64
 	power      bool
 	lastSynced string // target already state-synced; avoids UDP per tab switch
 
 	aura          *aura
+	dim           *canvas.Rectangle // full-window scrim behind manage
 	status        *canvas.Text
 	content       *fyne.Container
 	numTxt        *canvas.Text
 	descTxt       *canvas.Text
 	pwWord        *word
 	manageRebuild func()
+	timerTick     func() // timer tab's countdown render, driven by hero ticker
 	viewGen       int
 
 	timerEnd time.Time
@@ -92,8 +97,20 @@ func main() {
 	u.content = container.NewStack()
 	u.aura = newAura()
 
-	bg := canvas.NewRectangle(colBGDeep)
-	u.win.SetContent(container.NewStack(bg, u.aura.layer, u.content))
+	// scrim sits in the window stack so it also covers the translucent
+	// system-bar strip — a panel inside the inset content can't reach it;
+	// the ground itself is the theme background (colBGDeep), no extra rect
+	u.dim = canvas.NewRectangle(scrimCol())
+	u.dim.Hide()
+	u.win.SetPadded(false) // edge-to-edge: no frame around the app
+	u.win.SetContent(container.NewStack(u.aura.layer, u.dim, u.content))
+	// Android back inside manage returns home instead of minimizing the app;
+	// the scrim is visible exactly while manage is open
+	u.win.Canvas().SetOnTypedKey(func(k *fyne.KeyEvent) {
+		if k.Name == fynemobile.KeyBack && u.dim.Visible() {
+			u.showHome()
+		}
+	})
 	u.refreshAura()
 	u.showHome()
 	u.win.ShowAndRun()
@@ -255,6 +272,10 @@ func kelvinColor(k float64) color.NRGBA {
 
 func (u *ui) showHome() {
 	u.viewGen++
+	u.dim.Hide()
+	u.dim.Refresh()
+	u.manageRebuild = nil // drop the manage widget tree
+	u.timerTick = nil     // rebound below if the timer tab is open
 	keys := u.selectable()
 	if u.sel == "" && len(keys) > 0 {
 		u.sel = keys[0]
@@ -279,14 +300,16 @@ func (u *ui) showHome() {
 	subT := monoText(strings.ToUpper(sub), 9, colDim)
 	subT.Alignment = fyne.TextAlignCenter
 
-	// device dots: tap the name to cycle targets
+	// device dots: only when there is something to switch between
 	dots := container.NewHBox(layout.NewSpacer())
-	for _, k := range keys {
-		d := canvas.NewCircle(colFaint)
-		if k == u.sel {
-			d.FillColor = colAccent
+	if len(keys) > 1 {
+		for _, k := range keys {
+			d := canvas.NewCircle(colFaint)
+			if k == u.sel {
+				d.FillColor = colAccent
+			}
+			dots.Add(container.NewGridWrap(fyne.NewSize(6, 6), d))
 		}
-		dots.Add(container.NewGridWrap(fyne.NewSize(6, 6), d))
 	}
 	dots.Add(layout.NewSpacer())
 	cycle := newWord("", 11, colTransparent, func() {
@@ -299,7 +322,7 @@ func (u *ui) showHome() {
 		u.showHome() // sel changed → showHome re-syncs
 	})
 
-	head := container.NewVBox(gap(26), container.NewStack(container.NewVBox(title, subT), cycle), gap(8), dots)
+	head := container.NewVBox(gap(36), container.NewStack(container.NewVBox(title, subT), cycle), gap(8), dots)
 
 	// center: numeral floats in the glow, drag anywhere = brightness
 	u.numTxt = monoText(strconv.Itoa(int(u.bright)), 64, colText)
@@ -329,8 +352,46 @@ func (u *ui) showHome() {
 	)
 	hint := monoText("SLIDE ↑ ↓ TO DIM", 8, withAlpha(colText, 0x4D))
 	hint.Alignment = fyne.TextAlignCenter
+
+	// active sleep timer surfaces on the hero, whatever tab is open; this is
+	// the view's only countdown ticker — the timer tab hooks in via timerTick
+	timerTxt := monoText("", 9, colDim)
+	timerTxt.Alignment = fyne.TextAlignCenter
+	renderTimer := func() {
+		timerTxt.Text = ""
+		if !u.timerEnd.IsZero() {
+			timerTxt.Text = "SLEEP · " + countdown(u.timerEnd)
+		}
+		timerTxt.Refresh()
+		if u.timerTick != nil {
+			u.timerTick()
+		}
+	}
+	renderTimer()
+	gen := u.viewGen
+	go func() {
+		tk := time.NewTicker(time.Second)
+		defer tk.Stop()
+		last := ""
+		for range tk.C {
+			if u.viewGen != gen {
+				return
+			}
+			s := ""
+			if !u.timerEnd.IsZero() {
+				s = countdown(u.timerEnd)
+			}
+			if s == last {
+				continue // idle: zero UI work; one last pass clears cancel/fire
+			}
+			last = s
+			fyne.Do(renderTimer)
+		}
+	}()
+
 	center := container.NewStack(field,
-		container.NewCenter(container.NewVBox(numRow, u.descTxt, gap(4), hint, gap(8), container.NewCenter(u.pwWord))))
+		container.NewCenter(container.NewVBox(numRow, u.descTxt, gap(4), hint, gap(8),
+			container.NewCenter(u.pwWord), gap(2), timerTxt)))
 
 	u.content.Objects = []fyne.CanvasObject{container.NewBorder(head, u.sheet(), nil, nil, center)}
 	u.content.Refresh()
@@ -481,19 +542,77 @@ func (u *ui) lightSheet() fyne.CanvasObject {
 		})
 
 	dotRow := container.NewHBox(layout.NewSpacer())
-	for _, c := range presetColors {
-		c := c
-		d := canvas.NewCircle(c)
-		tap := newWord(" ", 11, colTransparent, func() {
-			u.paint(c, strings.ToUpper(nrgbaHex(c)), map[string]interface{}{
-				"r": int(c.R), "g": int(c.G), "b": int(c.B), "state": true,
-			})
-		})
-		dotRow.Add(container.NewStack(container.NewCenter(container.NewGridWrap(fyne.NewSize(17, 17), d)), tap))
+	dot := func(obj fyne.CanvasObject, tapped func()) {
+		tap := newWord(" ", 11, colTransparent, tapped)
+		dotRow.Add(container.NewStack(container.NewCenter(container.NewGridWrap(fyne.NewSize(17, 17), obj)), tap))
 		dotRow.Add(layout.NewSpacer())
 	}
+	for _, c := range presetColors {
+		c := c
+		dot(canvas.NewCircle(c), func() { u.paintRGB(c) })
+	}
+	// last dot: hue wheel — toggles the full-spectrum slider
+	wheel := canvas.NewImageFromImage(bakeHueDot())
+	wheel.ScaleMode = canvas.ImageScaleFastest
+	dot(wheel, func() {
+		u.huePick = !u.huePick
+		u.showHome()
+	})
 
-	return container.NewVBox(temp, gap(4), dotRow, gap(4))
+	box := container.NewVBox(temp, gap(4), dotRow, gap(4))
+	if u.huePick {
+		hue := newGSlider(0, 360, 180, hueColor,
+			func(v float64) { u.aura.set(hueColor(v), u.bright/100, true) },
+			func(v float64) { u.paintRGB(hueColor(v)) })
+		box.Add(hue)
+		box.Add(gap(4))
+	}
+	return box
+}
+
+// paintRGB sends a solid color, shared by preset dots and the hue slider.
+func (u *ui) paintRGB(c color.NRGBA) {
+	u.paint(c, strings.ToUpper(nrgbaHex(c)), map[string]interface{}{
+		"r": int(c.R), "g": int(c.G), "b": int(c.B), "state": true,
+	})
+}
+
+// hueColor maps 0..360 to the full-saturation RGB spectrum.
+func hueColor(h float64) color.NRGBA {
+	h = math.Mod(math.Mod(h, 360)+360, 360) / 60
+	f := h - math.Floor(h)
+	var r, g, b float64
+	switch int(h) {
+	case 0:
+		r, g, b = 1, f, 0
+	case 1:
+		r, g, b = 1-f, 1, 0
+	case 2:
+		r, g, b = 0, 1, f
+	case 3:
+		r, g, b = 0, 1-f, 1
+	case 4:
+		r, g, b = f, 0, 1
+	default:
+		r, g, b = 1, 0, f
+	}
+	return color.NRGBA{R: uint8(r * 255), G: uint8(g * 255), B: uint8(b * 255), A: 0xFF}
+}
+
+// bakeHueDot renders the little color wheel that opens the hue slider.
+func bakeHueDot() image.Image {
+	const n, r = 64, 30.0
+	img := image.NewNRGBA(image.Rect(0, 0, n, n))
+	for y := 0; y < n; y++ {
+		for x := 0; x < n; x++ {
+			dx, dy := float64(x)-n/2, float64(y)-n/2
+			if math.Hypot(dx, dy) > r {
+				continue
+			}
+			img.SetNRGBA(x, y, hueColor(math.Atan2(dy, dx)*180/math.Pi+180))
+		}
+	}
+	return img
 }
 
 // scenes: tinted words, tap = the room becomes it
@@ -512,6 +631,15 @@ func (u *ui) scenesSheet() fyne.CanvasObject {
 	return container.NewVBox(sheetLabel("scenes"), grid, gap(4))
 }
 
+// countdown formats time left until end as M:SS, clamped at zero.
+func countdown(end time.Time) string {
+	left := time.Until(end)
+	if left < 0 {
+		left = 0
+	}
+	return fmt.Sprintf("%d:%02d", int(left.Minutes()), int(left.Seconds())%60)
+}
+
 // timer: countdown + presets + manual entry
 func (u *ui) timerSheet() fyne.CanvasObject {
 	disp := monoText("–", 34, colText)
@@ -523,29 +651,12 @@ func (u *ui) timerSheet() fyne.CanvasObject {
 		if u.timerEnd.IsZero() {
 			disp.Text = "–"
 		} else {
-			left := time.Until(u.timerEnd)
-			if left < 0 {
-				left = 0
-			}
-			disp.Text = fmt.Sprintf("%d:%02d", int(left.Minutes()), int(left.Seconds())%60)
+			disp.Text = countdown(u.timerEnd)
 		}
 		disp.Refresh()
 	}
 	render()
-	gen := u.viewGen
-	go func() {
-		tk := time.NewTicker(time.Second)
-		defer tk.Stop()
-		for range tk.C {
-			if u.viewGen != gen {
-				return
-			}
-			if u.timerEnd.IsZero() {
-				continue // idle: nothing to redraw
-			}
-			fyne.Do(render)
-		}
-	}()
+	u.timerTick = render // hero's per-second ticker drives this display too
 
 	start := func(mins int) {
 		if u.timerT != nil {
@@ -558,8 +669,7 @@ func (u *ui) timerSheet() fyne.CanvasObject {
 			u.report("sleep off", u.eng.SetPower(ts, false))
 			u.timerEnd = time.Time{}
 		})
-		u.setStatus(fmt.Sprintf("sleep in %dm", mins), colOK)
-		render()
+		render() // countdown itself is the feedback — no status line
 	}
 
 	presets := container.NewHBox(layout.NewSpacer())
@@ -570,7 +680,7 @@ func (u *ui) timerSheet() fyne.CanvasObject {
 	presets.Add(layout.NewSpacer())
 
 	mins := widget.NewEntry()
-	mins.SetPlaceHolder("minutes")
+	mins.SetPlaceHolder("MINUTES")
 	startW := newWord("START", 11, colOK, func() {
 		m, err := strconv.Atoi(strings.TrimSpace(mins.Text))
 		if err != nil || m < 1 || m > 720 {
@@ -584,7 +694,6 @@ func (u *ui) timerSheet() fyne.CanvasObject {
 			u.timerT.Stop()
 		}
 		u.timerEnd = time.Time{}
-		u.setStatus("timer cancelled", colDim)
 		render()
 	})
 	manual := container.NewHBox(layout.NewSpacer(),
@@ -608,6 +717,9 @@ func (u *ui) themesSheet() fyne.CanvasObject {
 			go u.eng.SetTheme(p.Store)
 			applyPalette(p)
 			u.app.Settings().SetTheme(newLuminaTheme())
+			// repaint the chrome that captured the old palette
+			u.dim.FillColor = scrimCol()
+			u.aura.refade()
 			u.showHome()
 		}))
 	}
@@ -624,17 +736,24 @@ func (u *ui) showManage(autoScan bool) {
 		newWord("✕ CLOSE", 11, colAccent, func() { u.showHome() })))
 
 	body := container.NewVBox()
-	u.manageRebuild = func() { u.buildManageBody(body) }
+	composer := container.NewVBox()
+	u.manageRebuild = func() {
+		u.buildManageBody(body)
+		u.buildComposer(composer)
+	}
 	u.manageRebuild()
 
-	u.content.Objects = []fyne.CanvasObject{container.NewBorder(gap(40), nil, nil, nil,
-		container.NewStack(sheetBG(0xD9), container.NewPadded(container.NewBorder(
-			head,
-			container.NewVBox(container.NewCenter(u.status), gap(12)),
+	// window-layer scrim darkens everything (aura included) behind manage
+	u.dim.Show()
+	u.dim.Refresh()
+	u.content.Objects = []fyne.CanvasObject{
+		container.NewPadded(container.NewBorder(
+			container.NewVBox(gap(24), head),
+			container.NewVBox(composer, gap(10)),
 			nil, nil,
 			container.NewVScroll(container.NewPadded(body)),
-		))),
-	)}
+		)),
+	}
 	u.content.Refresh()
 	if autoScan {
 		u.scan()
@@ -706,8 +825,9 @@ func (u *ui) buildManageBody(body *fyne.Container) {
 
 	body.Add(sheetLabel("discover"))
 	scanW := newWord("SCAN NETWORK", 12, colAccent, u.scan)
-	body.Add(container.NewCenter(scanW))
-	body.Add(gap(10))
+	// status lives right under the word that triggers it
+	body.Add(container.NewVBox(container.NewCenter(scanW), container.NewCenter(u.status)))
+	body.Add(gap(16))
 
 	body.Add(sheetLabel("devices"))
 	for _, d := range cfg.SavedDevices {
@@ -737,7 +857,7 @@ func (u *ui) buildManageBody(body *fyne.Container) {
 		}
 		body.Add(hairRow(row, rename, del))
 	}
-	body.Add(gap(10))
+	body.Add(gap(16))
 
 	body.Add(sheetLabel("groups"))
 	for _, g := range cfg.Groups {
@@ -751,20 +871,28 @@ func (u *ui) buildManageBody(body *fyne.Container) {
 		})
 		body.Add(hairRow(rowTitle("◇ "+g.Name, fmt.Sprintf("%d devices", len(g.Macs))), del))
 	}
+	body.Refresh()
+}
+
+// buildComposer is the new-group builder, pinned to the screen bottom.
+func (u *ui) buildComposer(box *fyne.Container) {
+	cfg := u.eng.GetConfig()
+	box.RemoveAll()
 
 	nameEntry := widget.NewEntry()
-	nameEntry.SetPlaceHolder("new group name")
+	nameEntry.SetPlaceHolder("NEW GROUP NAME")
 	members := map[string]bool{}
 	memberRow := container.NewHBox()
 	for _, d := range cfg.SavedDevices {
 		mac := core.NormMac(d.Mac)
+		name := strings.ToUpper(d.Name)
 		var w *word
-		w = newWord(strings.ToUpper(d.Name), 10, colDim, func() {
+		w = newWord(name, 10, colDim, func() {
 			members[mac] = !members[mac]
 			if members[mac] {
-				w.set(strings.ToUpper(d.Name), colAccent)
+				w.set("✓ "+name, colAccent)
 			} else {
-				w.set(strings.ToUpper(d.Name), colDim)
+				w.set(name, colDim)
 			}
 		})
 		memberRow.Add(w)
@@ -782,10 +910,9 @@ func (u *ui) buildManageBody(body *fyne.Container) {
 		}
 		u.manageRebuild()
 	})
-	body.Add(container.NewVBox(
-		nameEntry,
-		container.NewHScroll(memberRow),
-		container.NewBorder(nil, nil, nil, create),
-	))
-	body.Refresh()
+
+	box.Add(sheetLabel("new group · tap members to pick"))
+	box.Add(container.NewHScroll(memberRow))
+	box.Add(container.NewBorder(nil, nil, nil, container.NewPadded(create), nameEntry))
+	box.Refresh()
 }

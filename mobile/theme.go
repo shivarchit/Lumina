@@ -13,7 +13,6 @@ import (
 type palette struct {
 	Store  string
 	Label  string
-	BG     color.NRGBA
 	BGDeep color.NRGBA
 	Text   color.NRGBA
 	Accent color.NRGBA
@@ -24,20 +23,19 @@ func hex(v uint32) color.NRGBA {
 }
 
 var palettes = []palette{
-	{"mocha", "☾ NIGHT", hex(0x0A0A0F), hex(0x020203), hex(0xF8F8F4), hex(0xFFD9A0)},
-	{"latte", "⛅ DUSK", hex(0x575072), hex(0x35304A), hex(0xF5F2FA), hex(0xFFC6A0)},
-	{"macchiato", "MACCHIATO", hex(0x24273A), hex(0x181926), hex(0xCAD3F5), hex(0xC6A0F6)},
-	{"frappe", "FRAPPÉ", hex(0x303446), hex(0x232634), hex(0xC6D0F5), hex(0xCA9EE6)},
-	{"dracula", "DRACULA", hex(0x282A36), hex(0x1D1E26), hex(0xF8F8F2), hex(0xBD93F9)},
-	{"gruvbox", "GRUVBOX", hex(0x282828), hex(0x1D2021), hex(0xEBDBB2), hex(0xD3869B)},
-	{"indigo", "INDIGO", hex(0x0F172A), hex(0x020617), hex(0xE2E8F0), hex(0x818CF8)},
-	{"ember", "EMBER", hex(0x1C120C), hex(0x0A0503), hex(0xF5E9DF), hex(0xFF9E64)},
+	{"mocha", "☾ NIGHT", hex(0x020203), hex(0xF8F8F4), hex(0xFFD9A0)},
+	{"latte", "⛅ DUSK", hex(0x35304A), hex(0xF5F2FA), hex(0xFFC6A0)},
+	{"macchiato", "MACCHIATO", hex(0x181926), hex(0xCAD3F5), hex(0xC6A0F6)},
+	{"frappe", "FRAPPÉ", hex(0x232634), hex(0xC6D0F5), hex(0xCA9EE6)},
+	{"dracula", "DRACULA", hex(0x1D1E26), hex(0xF8F8F2), hex(0xBD93F9)},
+	{"gruvbox", "GRUVBOX", hex(0x1D2021), hex(0xEBDBB2), hex(0xD3869B)},
+	{"indigo", "INDIGO", hex(0x020617), hex(0xE2E8F0), hex(0x818CF8)},
+	{"ember", "EMBER", hex(0x0A0503), hex(0xF5E9DF), hex(0xFF9E64)},
 }
 
 // Active palette tokens — package globals read at render time; switching
 // themes rewrites these then rebuilds the UI.
 var (
-	colBG     = palettes[0].BG
 	colBGDeep = palettes[0].BGDeep
 	colText   = palettes[0].Text
 	colAccent = palettes[0].Accent
@@ -60,10 +58,14 @@ func paletteFor(store string) palette {
 }
 
 func applyPalette(p palette) {
-	colBG, colBGDeep, colText, colAccent = p.BG, p.BGDeep, p.Text, p.Accent
+	colBGDeep, colText, colAccent = p.BGDeep, p.Text, p.Accent
 }
 
 func withAlpha(c color.NRGBA, a uint8) color.NRGBA { c.A = a; return c }
+
+// scrimCol is the manage-screen dim scrim; single source so creation and
+// theme-switch repaint can't drift.
+func scrimCol() color.NRGBA { return withAlpha(colBGDeep, 0x99) }
 
 type luminaTheme struct{ fyne.Theme }
 
@@ -72,7 +74,9 @@ func newLuminaTheme() fyne.Theme { return &luminaTheme{theme.DefaultTheme()} }
 func (t *luminaTheme) Color(name fyne.ThemeColorName, _ fyne.ThemeVariant) color.Color {
 	switch name {
 	case theme.ColorNameBackground:
-		return colBG
+		// matches the app's deepest ground so the system-bar inset strip
+		// (painted with the canvas background) never reads as a border
+		return colBGDeep
 	case theme.ColorNameForeground:
 		return colText
 	case theme.ColorNamePrimary, theme.ColorNameFocus:

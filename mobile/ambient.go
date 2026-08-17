@@ -18,9 +18,11 @@ import (
 const glowTex = 256 // baked glow texture size; blurry by nature, scales free
 
 type aura struct {
-	img   *canvas.Image
-	layer *fyne.Container
-	anim  *fyne.Animation
+	img     *canvas.Image
+	topFade *canvas.Image // smoothstep blends into the system-bar strips,
+	botFade *canvas.Image // with opaque headroom past the content edge
+	layer   *fyne.Container
+	anim    *fyne.Animation
 
 	embers []*canvas.RadialGradient
 
@@ -75,9 +77,20 @@ func (a *aura) place(s fyne.Size) {
 		return
 	}
 	y := s.Height * float32(0.56-0.24*a.level)
-	w := s.Width * 2.6 // big enough that the texture edge stays off-screen
-	a.img.Resize(fyne.NewSize(w, w))
-	a.img.Move(fyne.NewPos(s.Width/2-w/2, y-w/2))
+	// spans the whole screen; the translucent activity theme lets it run
+	// under the system bars, so the falloff never meets a hard edge
+	w := s.Width * 2.6
+	h := s.Height * 1.9
+	a.img.Resize(fyne.NewSize(w, h))
+	a.img.Move(fyne.NewPos(s.Width/2-w/2, y-h/2))
+	// fades overhang the content edge: the glow bleeds under the translucent
+	// system bars (outside content bounds), so each fade holds full strip
+	// color across that overhang before easing off inside the content
+	fadeSize := fyne.NewSize(s.Width, fadeOver+fadeRun)
+	a.topFade.Resize(fadeSize)
+	a.topFade.Move(fyne.NewPos(0, -fadeOver))
+	a.botFade.Resize(fadeSize)
+	a.botFade.Move(fyne.NewPos(0, s.Height-fadeRun))
 }
 
 type emberSpec struct {
@@ -99,10 +112,51 @@ var emberSpecs = []emberSpec{
 }
 
 // newAura builds glow + embers. The animation only moves embers — cheap.
+const (
+	// ponytail: fixed overhang instead of querying the real bar inset —
+	// covers any portrait status/nav bar; switch to Canvas().InteractiveArea()
+	// if a device ever ships a taller inset
+	fadeOver float32 = 200 // opaque overhang past the content edge
+	fadeRun  float32 = 300 // smoothstep run inside the content
+	fadeTex          = 512 // 1px-wide baked ramp, GPU-stretched like the glow
+)
+
+// bakeFade renders the 1×N strip-color ramp: opaque across the overhang,
+// then a smoothstep to transparent (zero slope both ends, so neither edge
+// of the fade shows).
+func bakeFade(bottom bool) image.Image {
+	img := image.NewNRGBA(image.Rect(0, 0, 1, fadeTex))
+	over := float64(fadeOver / (fadeOver + fadeRun))
+	for y := 0; y < fadeTex; y++ {
+		t := float64(y) / float64(fadeTex-1)
+		if bottom {
+			t = 1 - t
+		}
+		t = (t - over) / (1 - over)
+		f := 1.0
+		if t > 0 {
+			f = 1 - (3*t*t - 2*t*t*t)
+		}
+		img.SetNRGBA(0, y, withAlpha(colBGDeep, uint8(f*255)))
+	}
+	return img
+}
+
+// refade rebakes the edge fades (theme switch changes colBGDeep).
+func (a *aura) refade() {
+	a.topFade.Image = bakeFade(false)
+	a.botFade.Image = bakeFade(true)
+	a.topFade.Refresh()
+	a.botFade.Refresh()
+}
+
 func newAura() *aura {
 	a := &aura{img: canvas.NewImageFromImage(bakeGlow(colAccent))}
 	a.img.ScaleMode = canvas.ImageScaleFastest
-	a.layer = container.NewWithoutLayout(a.img)
+	a.topFade = &canvas.Image{ScaleMode: canvas.ImageScaleFastest}
+	a.botFade = &canvas.Image{ScaleMode: canvas.ImageScaleFastest}
+	a.refade()
+	a.layer = container.NewWithoutLayout(a.img, a.topFade, a.botFade)
 
 	for _, s := range emberSpecs {
 		e := canvas.NewRadialGradient(withAlpha(colAccent, s.alpha), colTransparent)
